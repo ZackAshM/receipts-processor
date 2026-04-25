@@ -71,17 +71,6 @@ receipts_processor data/inbox \
   --risk-controls-file configs/risk_controls.yaml
 ```
 
-## GUI Quick Start
-
-```bash
-receipts_processor_gui
-```
-
-GUI behavior:
-- Lets users choose the receipts folder using the OS file picker.
-- Keeps common controls up front (folder selection + Run).
-- Places model/output/log/risk controls inside an Advanced section.
-
 ## Usage Guide (For End Users)
 
 ### 1) Prepare your receipts folder
@@ -129,6 +118,20 @@ If `--output-file` is omitted, the default is:
 - `--output-type` defaults to `csv`
 
 If `--output-file` has no extension, the app appends `.<output-type>`.
+
+### 2b) GUI usage (optional)
+
+Run:
+
+```bash
+receipts_processor_gui
+```
+
+If `_tkinter` import fails, install Tk support for your Python:
+- Ubuntu/Debian: `sudo apt-get install python3-tk`
+- Fedora: `sudo dnf install python3-tkinter`
+- macOS (Homebrew): `brew install python-tk` (or `brew install tcl-tk`)
+- If all else fails: install Python with tkinter supported from [python.org](https://www.python.org/downloads/) and recreate your venv
 
 ### 3) Review outputs
 
