@@ -18,7 +18,9 @@ dependencies = [
 ]
 
 [project.scripts]
-receipt-processor = "receipt_processor.cli:app"
+receipt-processor = "receipt_processor.cli:main"
+receipt_processor = "receipt_processor.cli:main"
+receipts_processor = "receipt_processor.cli:main"
 
 [tool.setuptools]
 package-dir = {"" = "src"}

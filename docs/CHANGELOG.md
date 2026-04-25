@@ -28,6 +28,7 @@
 - Added spreadsheet sanitization for exception sidecar CSV exports.
 - Enforced low-confidence routing using loaded runtime thresholds from `configs/risk_controls.yaml`.
 - Added optional log privacy mode to mask user/file identifiers in telemetry.
+- Updated CLI UX to support direct positional invocation (`receipts_processor <input_dir>`) with optional flags.
 
 ### Attribution
 - Direction and requirements defined by user.

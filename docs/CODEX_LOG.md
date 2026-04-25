@@ -660,3 +660,91 @@ Pre-production / pilot-ready, but **not yet production-ready** due the two P1 it
 ```
 
 Could you address the most pressing issues presented? Some findings may be a misunderstanding, so decide on what's needed vs not needed.
+
+---
+
+# Codex
+Implemented the pressing issues and validated them.
+
+**Fixed now**
+1. Exception CSV sanitization (P1):
+- Exception exports now sanitize cells the same way as main exports, preventing formula-injection vectors in sidecar files.
+- Updated: `src/receipt_processor/quality/exception_queue.py`
+
+2. Risk-threshold enforcement from config (P1):
+- Pipeline now loads and enforces confidence controls from `risk_controls.yaml` (or override path).
+- Low-confidence records are routed to exceptions as `issue_type=low_confidence`.
+- Updated: `src/receipt_processor/config/risk_controls.py`, `src/receipt_processor/pipeline.py`, `src/receipt_processor/cli.py`
+
+3. “Configs are passive” drift (P2):
+- `configs/risk_controls.yaml` is now actively used at runtime.
+- Updated docs: `configs/README.md`
+
+4. Metadata logging exposure (P2, mitigated):
+- Added optional privacy mode for logs: `RECEIPT_PROCESSOR_LOG_PRIVACY_MODE=redacted` (masks user ID, source filename, sensitive details in telemetry).
+- Updated: `src/receipt_processor/observability/runtime_logger.py`, `src/receipt_processor/observability/README.md`, `.env.example`
+
+**Tests**
+- Added targeted tests for these fixes:
+  - `tests/test_risk_controls_and_exceptions.py`
+  - `tests/test_runtime_logger.py`
+- Full suite result: `22 passed`.
+
+**Not done yet (by priority, next if you want)**
+- CI workflow (`.github/workflows`)
+- lockfile/SBOM/dependency audit pipeline
+
+If you want, I can do those next as a focused “production-hardening” pass.
+
+---
+
+# User
+Ok, I have staged these for commit. Please git commit the staged changes with an appropriate message
+
+---
+
+# Codex
+Committed the staged changes.
+
+- Commit: `e836a9e`
+- Message: `Harden extraction pipeline with risk controls and safe exception export`
+
+Note: `docs/CODEX_LOG.md` has an unstaged update from the latest append-only log step.
+
+---
+
+# User
+I want to be able to run the app on the command line as something like `receipts_processor \path\to\receipts\` with optional flagging for the extra stuff (model-file, output, log-dir, etc.)
+
+---
+
+# Codex
+Implemented. You can now run the app as:
+
+```bash
+receipts_processor /path/to/receipts \
+  --model-file models/model.csv \
+  --example-file models/example.csv \
+  --output-file /path/to/output/Expenses.csv \
+  --log-dir logs \
+  --risk-controls-file configs/risk_controls.yaml
+```
+
+What I changed:
+- Reworked CLI to use positional `INPUT_DIR` + optional flags in `src/receipt_processor/cli.py`
+- Added console script names (`receipts_processor`, plus aliases) in `pyproject.toml`
+- Updated usage docs in `README.md`
+- Added CLI test coverage in `tests/test_cli.py`
+
+Validation:
+- CLI help works from installed entrypoint: `.venv/bin/receipts_processor --help`
+- Full tests pass: `23 passed` (`PYTHONPATH=src .venv/bin/python -m pytest -q`)
+
+Note:
+- To make `receipts_processor` available in your venv, install the package entrypoint:
+  - `.venv/bin/python -m pip install -e . --no-build-isolation`
+
+---
+
+# User
+Ok, I've staged the files for commit. Update the codex log, then stage it, and then commit

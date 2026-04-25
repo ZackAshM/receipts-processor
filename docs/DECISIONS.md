@@ -77,3 +77,9 @@
 - Requested by: User
 - Implemented by: Codex
 - Rationale: Confidence thresholds defined in `configs/risk_controls.yaml` must be enforced in pipeline routing so low-confidence records are queued for review.
+
+## D-0014: Direct Positional CLI Entry
+- Status: Accepted
+- Requested by: User
+- Implemented by: Codex
+- Rationale: End users should be able to run the app as `receipts_processor <receipts_folder>` with optional flags for model/output/log/risk controls.

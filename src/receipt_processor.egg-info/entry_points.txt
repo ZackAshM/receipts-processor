@@ -1,0 +1,4 @@
+[console_scripts]
+receipt-processor = receipt_processor.cli:main
+receipt_processor = receipt_processor.cli:main
+receipts_processor = receipt_processor.cli:main
