@@ -555,3 +555,49 @@ So: **real secrets are ignored, template is versioned.**
 
 # User
 Can you add a logging mechanism that will store logs per-user of the app performance. This will be useful for performance evaluation and debugging. I assume some sort of `logs` directory that will be empty when the user first installs and get filled as the user uses the app. But modify this interpretation if there's a more "correct" or "accepted" approach for this kind of feature.
+
+---
+
+# Codex
+Implemented. I used the accepted approach: **structured per-user runtime logs in JSONL**, created at runtime (not pre-populated in repo), and ignored by git.
+
+**What I added**
+- Per-user logger module:
+  - `src/receipt_processor/observability/runtime_logger.py`
+  - Writes to `logs/users/<user_id>/performance-YYYY-MM-DD.jsonl`
+  - Event types: `run_started`, `receipt_processed`, `receipt_flagged`, `run_completed`
+  - Includes performance metrics (`duration_ms`, counts) and debug metadata (no raw receipt text)
+
+- Pipeline integration:
+  - `src/receipt_processor/pipeline.py`
+  - Logs run-level + per-file outcomes and timings
+  - Supports optional `log_dir` parameter
+
+- CLI support:
+  - `src/receipt_processor/cli.py`
+  - Added `--log-dir` option
+
+- New observability package docs:
+  - `src/receipt_processor/observability/README.md`
+
+- Git ignore + env config:
+  - `.gitignore` now ignores `logs/`
+  - `.env.example` includes:
+    - `RECEIPT_PROCESSOR_LOG_DIR`
+    - `RECEIPT_PROCESSOR_USER_ID`
+
+**Tests**
+- Added logger tests:
+  - `tests/test_runtime_logger.py`
+- Updated pipeline tests to validate logs:
+  - `tests/test_notes_and_flags.py`
+- Full suite result:
+  - `PYTHONPATH=src .venv/bin/python -m pytest -q`
+  - **19 passed**
+
+This gives you the install behavior you wanted: logs are effectively “empty” until the app runs, then created automatically with per-user performance/debug records.
+
+---
+
+# User
+Can you add to the parent README.md a usage guide? For instance, if I'm a user, I currently do not know where to put my folder of receipts or if it even matters where. And once I have my folder of receipts, how do I run this app in order to get the expenses file

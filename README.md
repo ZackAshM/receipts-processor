@@ -55,6 +55,48 @@ PYTHONPATH=src python -m receipt_processor.cli build-expenses \
   --log-dir logs
 ```
 
+## Usage Guide (For End Users)
+
+### 1) Prepare your receipts folder
+
+- Supported files: `.pdf`, `.jpeg`, `.jpg`, `.png`
+- You can place receipts in either:
+  - the default folder: `data/inbox/`, or
+  - any custom folder path (inside or outside this repo)
+- Optional context files:
+  - `notes.txt` (global notes for all receipts in that folder)
+  - `<receipt_name>_notes.txt` (receipt-specific notes)
+
+### 2) Run the app
+
+Use the default project folders:
+
+```bash
+PYTHONPATH=src python -m receipt_processor.cli build-expenses \
+  --input-dir data/inbox \
+  --model-file models/model.csv \
+  --example-file models/example.csv \
+  --output-file data/output/Expenses.csv \
+  --log-dir logs
+```
+
+Use a custom receipts folder:
+
+```bash
+PYTHONPATH=src python -m receipt_processor.cli build-expenses \
+  --input-dir /path/to/my-receipts \
+  --model-file models/model.csv \
+  --example-file models/example.csv \
+  --output-file /path/to/output/Expenses.csv \
+  --log-dir logs
+```
+
+### 3) Review outputs
+
+- Main export: `Expenses.csv` (or `.xlsx` if you choose that extension)
+- Flagged records: `Expenses_exceptions.csv`
+- Runtime performance/debug logs: `logs/users/<user_id>/performance-YYYY-MM-DD.jsonl`
+
 ## Product Management Evidence
 
 I use the following files to show product ownership and decision quality:
