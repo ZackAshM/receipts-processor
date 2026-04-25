@@ -53,7 +53,7 @@ pip install -e .
 receipts_processor data/inbox \
   --model-file models/model.csv \
   --example-file models/example.csv \
-  --output-file data/output/Expenses.csv \
+  --output-type csv \
   --log-dir logs \
   --risk-controls-file configs/risk_controls.yaml
 ```
@@ -83,7 +83,7 @@ Use the default project folders:
 receipts_processor data/inbox \
   --model-file models/model.csv \
   --example-file models/example.csv \
-  --output-file data/output/Expenses.csv \
+  --output-type csv \
   --log-dir logs \
   --risk-controls-file configs/risk_controls.yaml
 ```
@@ -94,10 +94,16 @@ Use a custom receipts folder:
 receipts_processor /path/to/my-receipts \
   --model-file models/model.csv \
   --example-file models/example.csv \
-  --output-file /path/to/output/Expenses.csv \
+  --output-type xlsx \
   --log-dir logs \
   --risk-controls-file configs/risk_controls.yaml
 ```
+
+If `--output-file` is omitted, the default is:
+- `<INPUT_DIR>/Expenses.<output-type>`
+- `--output-type` defaults to `csv`
+
+If `--output-file` has no extension, the app appends `.<output-type>`.
 
 ### 3) Review outputs
 

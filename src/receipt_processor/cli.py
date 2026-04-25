@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import sys
+from enum import Enum
 from pathlib import Path
 
 import typer
@@ -17,6 +18,25 @@ app = typer.Typer(
         "  receipts_processor /path/to/receipts --output-file /tmp/Expenses.csv"
     )
 )
+
+
+class OutputType(str, Enum):
+    csv = "csv"
+    xlsx = "xlsx"
+
+
+def _resolve_output_file(
+    input_dir: Path,
+    output_file: Path | None,
+    output_type: OutputType,
+) -> Path:
+    if output_file is None:
+        return input_dir / f"Expenses.{output_type.value}"
+
+    if output_file.suffix:
+        return output_file
+
+    return output_file.with_suffix(f".{output_type.value}")
 
 
 @app.command()
@@ -46,12 +66,20 @@ def run(
         dir_okay=False,
         help="Example template file (.csv or .xlsx).",
     ),
-    output_file: Path = typer.Option(
-        Path("data/output/Expenses.csv"),
+    output_file: Path | None = typer.Option(
+        None,
         "--output-file",
         file_okay=True,
         dir_okay=False,
-        help="Output expenses file (.csv or .xlsx).",
+        help=(
+            "Output expenses file (.csv or .xlsx). If omitted, default is "
+            "<input_dir>/Expenses.<output-type>."
+        ),
+    ),
+    output_type: OutputType = typer.Option(
+        OutputType.csv,
+        "--output-type",
+        help="Default output format when extension is not specified (csv or xlsx).",
     ),
     log_dir: Path | None = typer.Option(
         Path("logs"),
@@ -65,15 +93,16 @@ def run(
     ),
 ) -> None:
     """Run the extraction pipeline directly from the command line."""
+    resolved_output = _resolve_output_file(input_dir, output_file, output_type)
     run_pipeline(
         input_dir=input_dir,
         model_file=model_file,
         example_file=example_file,
-        output_file=output_file,
+        output_file=resolved_output,
         log_dir=log_dir,
         risk_controls_file=risk_controls_file,
     )
-    typer.echo(f"Export complete: {output_file}")
+    typer.echo(f"Export complete: {resolved_output}")
 
 
 def main() -> None:

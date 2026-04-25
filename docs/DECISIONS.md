@@ -83,3 +83,15 @@
 - Requested by: User
 - Implemented by: Codex
 - Rationale: End users should be able to run the app as `receipts_processor <receipts_folder>` with optional flags for model/output/log/risk controls.
+
+## D-0015: Output Defaults to Input Folder
+- Status: Accepted
+- Requested by: User
+- Implemented by: Codex
+- Rationale: When `--output-file` is not provided, placing `Expenses.csv` in the input receipts folder improves default UX and reduces required CLI arguments.
+
+## D-0016: Output Type CLI Flag
+- Status: Accepted
+- Requested by: User
+- Implemented by: Codex
+- Rationale: Users should be able to choose output format via `--output-type` (`csv` default, `xlsx` optional) without always specifying a full output filename.

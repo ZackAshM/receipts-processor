@@ -18,3 +18,5 @@ data/output/
 !data/inbox/.gitkeep
 !data/processed/.gitkeep
 !data/output/.gitkeep
+
+todo.txt

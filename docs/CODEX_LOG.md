@@ -748,3 +748,58 @@ Note:
 
 # User
 Ok, I've staged the files for commit. Update the codex log, then stage it, and then commit
+
+---
+
+# Codex
+Done.
+
+- Updated `docs/CODEX_LOG.md`
+- Staged `docs/CODEX_LOG.md`
+- Committed all staged changes as requested
+
+Commit created:
+- `0140608`
+- `Add direct receipts_processor CLI invocation and usage docs`
+
+Note: this commit includes staged `src/receipt_processor.egg-info/*` files.
+
+---
+
+# User
+Ok, now change the interface so that the default output folder is the same as the receipts path.
+
+---
+
+# Codex
+Done. The CLI now defaults output to the same folder as the receipts input path.
+
+What changed:
+- In `src/receipt_processor/cli.py`, `--output-file` is now optional.
+- If omitted, output resolves to:
+  - `<INPUT_DIR>/Expenses.csv`
+
+So this works now:
+
+```bash
+receipts_processor /path/to/receipts \
+  --model-file models/model.csv \
+  --example-file models/example.csv \
+  --log-dir logs \
+  --risk-controls-file configs/risk_controls.yaml
+```
+
+And it will write to `/path/to/receipts/Expenses.csv` by default.
+
+Also updated:
+- `tests/test_cli.py` with a new test for default output behavior.
+- `README.md` usage examples/docs.
+- `docs/CHANGELOG.md` and `docs/DECISIONS.md`.
+
+Validation:
+- `24 passed` (`PYTHONPATH=src .venv/bin/python -m pytest -q`).
+
+---
+
+# User
+add optional --output-type to decide between csv and xlsx (with csv default)

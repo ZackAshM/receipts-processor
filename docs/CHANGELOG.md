@@ -29,6 +29,8 @@
 - Enforced low-confidence routing using loaded runtime thresholds from `configs/risk_controls.yaml`.
 - Added optional log privacy mode to mask user/file identifiers in telemetry.
 - Updated CLI UX to support direct positional invocation (`receipts_processor <input_dir>`) with optional flags.
+- Changed CLI default output location to `<input_dir>/Expenses.csv` when `--output-file` is omitted.
+- Added `--output-type` (`csv` default, optional `xlsx`) for output format selection.
 
 ### Attribution
 - Direction and requirements defined by user.
