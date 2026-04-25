@@ -803,3 +803,147 @@ Validation:
 
 # User
 add optional --output-type to decide between csv and xlsx (with csv default)
+
+---
+
+# Codex
+Added `--output-type` with `csv` default and `xlsx` option.
+
+What changed:
+- CLI now supports:
+  - `--output-type csv|xlsx` (default: `csv`)
+- Output resolution behavior:
+  - If `--output-file` is omitted: `<INPUT_DIR>/Expenses.<output-type>`
+  - If `--output-file` has no extension: appends `.<output-type>`
+  - If `--output-file` already has an extension: keeps it as provided
+
+Updated files:
+- `src/receipt_processor/cli.py`
+- `tests/test_cli.py`
+- `README.md`
+- `docs/CHANGELOG.md`
+- `docs/DECISIONS.md`
+
+Validation:
+- `26 passed` (`PYTHONPATH=src .venv/bin/python -m pytest -q`)
+
+---
+
+# User
+Ok, I can confirm that the app is working! It's not performing well in terms of the end result, but it's working.
+
+Let's start adding features. Create a new branch "GUI" to work on a GUI in addition to the CLI interface. The GUI should essentially allow the user to select the folder from their finder (or whatever their OS uses) and the GUI should include the options (less relevant options should go in an "Advanced" dropdown tab).
+
+---
+
+# Codex
+Implemented on branch `GUI`.
+
+What’s done:
+- Created and switched to branch `GUI`.
+- Added desktop GUI:
+  - `src/receipt_processor/gui.py`
+  - Folder picker for receipts (OS-native dialog)
+  - Primary simple flow: receipts folder + Run
+  - “Advanced Options” collapsible panel for less common settings:
+    - model file
+    - example file
+    - output type
+    - output file
+    - log dir
+    - risk controls file
+- Added GUI command entrypoint:
+  - `receipts_processor_gui` in `pyproject.toml`
+- Refactored shared output resolution for CLI+GUI consistency:
+  - `src/receipt_processor/interface_options.py`
+  - CLI now uses this shared module too
+- Added tests for shared output rules:
+  - `tests/test_interface_options.py`
+- Updated docs:
+  - `README.md` (GUI quick start + command list)
+  - `docs/CHANGELOG.md`
+  - `docs/DECISIONS.md`
+  - `src/receipt_processor/README.md`
+  - `tests/README.md`
+
+Validation:
+- `python3 -m compileall src tests` passed
+- `PYTHONPATH=src .venv/bin/python -m pytest -q` passed (`30 passed`)
+
+How to launch GUI after install:
+1. `.venv/bin/python -m pip install -e . --no-build-isolation`
+2. `receipts_processor_gui`
+
+---
+
+# User
+Yeah, the _tkinter import failed.
+
+---
+
+# Codex
+That failure makes sense, and I’ve now handled it in code so it won’t crash on import.
+
+What I changed:
+- Updated `src/receipt_processor/gui.py` to **lazy-load `tkinter`**.
+- If `tkinter` is unavailable, `receipts_processor_gui` now exits cleanly with a clear message and CLI fallback guidance instead of throwing `_tkinter` import stack traces.
+- Updated docs:
+  - `README.md`
+  - `docs/CHANGELOG.md`
+
+Validation:
+- `python3 -m compileall src tests` passed
+- `PYTHONPATH=src .venv/bin/python -m pytest -q` passed (`30 passed`)
+
+To verify your environment directly:
+```bash
+.venv/bin/python -c "import tkinter; print('tkinter OK')"
+```
+
+If that fails, GUI won’t run until Python/Tk support is installed, but CLI remains fully functional:
+```bash
+receipts_processor /path/to/receipts
+```
+
+---
+
+# User
+This doesn't make sense. Why don't you just include tkinter in requirements.txt and install it
+
+---
+
+# Codex
+Great question. Short answer: `tkinter` is **not a pip package dependency** in the normal sense.
+
+`_tkinter` is a compiled module that must exist in the **Python interpreter build itself** (with Tcl/Tk system libs). So adding `tkinter` to `requirements.txt` won’t reliably fix it.
+
+What works instead:
+- Install OS/Python Tk support (examples):
+  - Ubuntu/Debian: `sudo apt-get install python3-tk`
+  - Fedora: `sudo dnf install python3-tkinter`
+  - macOS/Windows: use a Python distribution that includes Tk support
+- Recreate the venv after that.
+- Verify: `python -c "import tkinter; print('ok')"`
+
+If you want, I can add a clear “GUI prerequisites” section to README with OS-specific steps.
+
+---
+
+# User
+I see. Yes, please add a section in README.md (perhaps after the CLI usage) for GUI usage instructions, and tkinter installation instructions. Make it brief.
+
+---
+
+# Codex
+Done. I added a brief GUI section right after the CLI usage flow in `README.md`, including:
+
+- how to launch GUI (`receipts_processor_gui`)
+- short `tkinter` install guidance for Linux
+- concise note for macOS/Windows Python builds with Tk support
+
+I also removed the earlier standalone “GUI Quick Start” block so the instructions are now consolidated in one place.
+
+---
+
+# User
+Maybe "use a Python build that includes tkinter" is not helpful. Include possible options, like `brew install python-tk`

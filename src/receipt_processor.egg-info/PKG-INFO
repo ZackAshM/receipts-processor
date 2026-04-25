@@ -66,10 +66,21 @@ pip install -e .
 receipts_processor data/inbox \
   --model-file models/model.csv \
   --example-file models/example.csv \
-  --output-file data/output/Expenses.csv \
+  --output-type csv \
   --log-dir logs \
   --risk-controls-file configs/risk_controls.yaml
 ```
+
+## GUI Quick Start
+
+```bash
+receipts_processor_gui
+```
+
+GUI behavior:
+- Lets users choose the receipts folder using the OS file picker.
+- Keeps common controls up front (folder selection + Run).
+- Places model/output/log/risk controls inside an Advanced section.
 
 ## Usage Guide (For End Users)
 
@@ -89,6 +100,7 @@ Available CLI command names:
 - `receipts_processor` (recommended)
 - `receipt_processor` (alias)
 - `receipt-processor` (alias)
+- `receipts_processor_gui` (desktop GUI)
 
 Use the default project folders:
 
@@ -96,7 +108,7 @@ Use the default project folders:
 receipts_processor data/inbox \
   --model-file models/model.csv \
   --example-file models/example.csv \
-  --output-file data/output/Expenses.csv \
+  --output-type csv \
   --log-dir logs \
   --risk-controls-file configs/risk_controls.yaml
 ```
@@ -107,10 +119,16 @@ Use a custom receipts folder:
 receipts_processor /path/to/my-receipts \
   --model-file models/model.csv \
   --example-file models/example.csv \
-  --output-file /path/to/output/Expenses.csv \
+  --output-type xlsx \
   --log-dir logs \
   --risk-controls-file configs/risk_controls.yaml
 ```
+
+If `--output-file` is omitted, the default is:
+- `<INPUT_DIR>/Expenses.<output-type>`
+- `--output-type` defaults to `csv`
+
+If `--output-file` has no extension, the app appends `.<output-type>`.
 
 ### 3) Review outputs
 
@@ -131,8 +149,3 @@ I use the following files to show product ownership and decision quality:
 ## Attribution Model
 
 I am intentionally transparent that Codex is a tool in this project. I define direction and acceptance criteria, and Codex executes approved work under my governance rules.
-
-## User-Requested Changes (Current Session)
-
-- I requested that `docs/CODEX_LOG.md` and `docs/INIT_PROMPT.txt` be included in the docs structure.
-- I requested that `docs/CODEX_LOG.md` be continuously updated in the format I established.

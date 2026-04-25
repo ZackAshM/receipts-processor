@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 import sys
-from enum import Enum
 from pathlib import Path
 
 import typer
 
+from receipt_processor.interface_options import OutputType, resolve_output_file
 from receipt_processor.pipeline import run_pipeline
 
 app = typer.Typer(
@@ -18,26 +18,6 @@ app = typer.Typer(
         "  receipts_processor /path/to/receipts --output-file /tmp/Expenses.csv"
     )
 )
-
-
-class OutputType(str, Enum):
-    csv = "csv"
-    xlsx = "xlsx"
-
-
-def _resolve_output_file(
-    input_dir: Path,
-    output_file: Path | None,
-    output_type: OutputType,
-) -> Path:
-    if output_file is None:
-        return input_dir / f"Expenses.{output_type.value}"
-
-    if output_file.suffix:
-        return output_file
-
-    return output_file.with_suffix(f".{output_type.value}")
-
 
 @app.command()
 def run(
@@ -93,7 +73,7 @@ def run(
     ),
 ) -> None:
     """Run the extraction pipeline directly from the command line."""
-    resolved_output = _resolve_output_file(input_dir, output_file, output_type)
+    resolved_output = resolve_output_file(input_dir, output_file, output_type)
     run_pipeline(
         input_dir=input_dir,
         model_file=model_file,

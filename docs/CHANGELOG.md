@@ -31,6 +31,8 @@
 - Updated CLI UX to support direct positional invocation (`receipts_processor <input_dir>`) with optional flags.
 - Changed CLI default output location to `<input_dir>/Expenses.csv` when `--output-file` is omitted.
 - Added `--output-type` (`csv` default, optional `xlsx`) for output format selection.
+- Added desktop GUI entrypoint with folder picker and Advanced options panel (`receipts_processor_gui`).
+- Added graceful GUI startup handling for environments without `tkinter` (clear fallback guidance).
 
 ### Attribution
 - Direction and requirements defined by user.

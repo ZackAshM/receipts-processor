@@ -2,6 +2,8 @@ README.md
 pyproject.toml
 src/receipt_processor/__init__.py
 src/receipt_processor/cli.py
+src/receipt_processor/gui.py
+src/receipt_processor/interface_options.py
 src/receipt_processor/pipeline.py
 src/receipt_processor.egg-info/PKG-INFO
 src/receipt_processor.egg-info/SOURCES.txt
@@ -34,6 +36,7 @@ tests/test_cli.py
 tests/test_exporter.py
 tests/test_extraction_parsing.py
 tests/test_file_discovery.py
+tests/test_interface_options.py
 tests/test_notes_and_flags.py
 tests/test_risk_controls_and_exceptions.py
 tests/test_runtime_logger.py

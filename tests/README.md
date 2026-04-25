@@ -5,6 +5,7 @@ Purpose:
 
 Contents:
 - `test_cli.py`: command-line invocation behavior and argument parsing.
+- `test_interface_options.py`: shared output path/type resolution rules.
 - `test_file_discovery.py`: supported file filtering.
 - `test_schema_mapping.py`: model-column mapping behavior.
 - `test_exporter.py`: export behavior and spreadsheet injection sanitization.

@@ -95,3 +95,9 @@
 - Requested by: User
 - Implemented by: Codex
 - Rationale: Users should be able to choose output format via `--output-type` (`csv` default, `xlsx` optional) without always specifying a full output filename.
+
+## D-0017: Desktop GUI Surface
+- Status: Accepted
+- Requested by: User
+- Implemented by: Codex
+- Rationale: Add a GUI in addition to CLI so users can select receipt folders via OS picker and access less common options from an Advanced panel.

@@ -76,6 +76,7 @@ Available CLI command names:
 - `receipts_processor` (recommended)
 - `receipt_processor` (alias)
 - `receipt-processor` (alias)
+- `receipts_processor_gui` (desktop GUI)
 
 Use the default project folders:
 
@@ -104,6 +105,20 @@ If `--output-file` is omitted, the default is:
 - `--output-type` defaults to `csv`
 
 If `--output-file` has no extension, the app appends `.<output-type>`.
+
+### 2b) GUI usage (optional)
+
+Run:
+
+```bash
+receipts_processor_gui
+```
+
+If `_tkinter` import fails, install Tk support for your Python:
+- Ubuntu/Debian: `sudo apt-get install python3-tk`
+- Fedora: `sudo dnf install python3-tkinter`
+- macOS (Homebrew): `brew install python-tk` (or `brew install tcl-tk`)
+- If all else fails: install Python with tkinter supported from [python.org](https://www.python.org/downloads/) and recreate your venv
 
 ### 3) Review outputs
 
