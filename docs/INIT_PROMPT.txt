@@ -1,0 +1,19 @@
+Let's create a project that does the following:
+
+1. A folder will contain PDFs or image types (JPEG, JPG, PNG) of receipts (which may come in a variety of types such as printed receipts, email prints, phone screenshots, etc.). Assume that the name of the file may provide additional information if the information is not contained in the file itself.
+2. This product should scan the files in the directed folder to retrieve expense information.
+3. Finally, the product will create an Expenses.xslx or Expenses.csv which follows the structure of a particular file. In this case, we will use `model.xslx` or `model.csv` with an "example.xslx" or "example.csv" file providing an example.
+
+In this project, you will be explicitly clear when a change is informed or requested by me. By this, I mean that README.md files should state things in my POV like "I used Codex to build project X from scratch. ... I defined the architecture, goals, etc ... I requested the following change in commit ABC ... ". Basically, you better give me credit where credit is due.
+
+You will also take action only after my approval. To get my approval, you will explain your current understanding of the task and then explain what changes you will make. After review, I will approve, modify, or reject your actions.
+
+This project must be structured impressively to showcase my skills in AI product management. We are not hiding that Codex is being used as a tool for project development. We are showcasing my ability to use Codex for product creation and product management.
+
+Let's consider these steps to begin the project:
+
+1. Begin a `venv` for this project in the project directory.
+2. Review the structure of the directory and request a canonical structure that the project can run under, which mimics the professional structuring of AI products.
+3. Include for this project a structure for agentic management (ie. for Codex) which provide files under which the agent follows instruction. This should include guardrails, risk management, and failure handling features to name a few.
+
+Once I review the requested structure and files, we can start working.

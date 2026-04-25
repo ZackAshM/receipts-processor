@@ -1,0 +1,5 @@
+Date,Description,Amt Claimed (USD),"Receipt Amt
+if different from amt claimed"
+"""<YEAR> <MONTH> <DAY>""","""<TYPE> - <NAME or DESCRIPTION>""",<USD AMOUNT CLAIMED>,<EMPTY OR RECEIPT AMOUNT IF DIFFERENT FROM AMOUNT CLAIMED>
+,,,
+,Total:,<TOTAL OF AMOUNTS CLAIMED>,

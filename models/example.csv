@@ -1,0 +1,11 @@
+Date,Description,Amt Claimed (USD),"Receipt Amt
+if different from amt claimed"
+2025 06 25,Transportation - Lyft to Airport,$54.91,
+2025 06 23,Food - Chilis,$45.94,
+2025 06 23,Food - Subs and Dogs,$11.31,
+2025 06 24,Food - Switch,$31.93,$45.72
+2025 06 24,Food - Taqueria San Luis,$19.23,
+2025 06 25,Food - Giovannis,$42.71,
+2025 06 26,Food - Pint and Barrel,$16.65,
+,,,
+,Total:,$222.68,

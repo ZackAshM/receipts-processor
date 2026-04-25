@@ -1,0 +1,55 @@
+# Decisions
+
+## D-0001: Human Approval Gate Is Mandatory
+- Status: Accepted
+- Requested by: User
+- Implemented by: Codex
+- Rationale: No code or file changes are executed before explicit approval.
+
+## D-0002: Transparent Attribution in User POV
+- Status: Accepted
+- Requested by: User
+- Implemented by: Codex
+- Rationale: Repository documentation should showcase AI product management leadership.
+
+## D-0003: Agentic Governance Artifacts
+- Status: Accepted
+- Requested by: User
+- Implemented by: Codex
+- Rationale: Guardrails, risk controls, and failure playbooks improve reliability and auditability.
+
+## D-0004: Canonical AI Product Structure
+- Status: Accepted
+- Requested by: User
+- Implemented by: Codex
+- Rationale: Professional structure improves maintainability and portfolio quality.
+
+## D-0005: Codex Log Maintenance Protocol
+- Status: Accepted
+- Requested by: User
+- Implemented by: Codex
+- Rationale: Every user prompt and Codex response should be captured in `docs/CODEX_LOG.md` using the established date-time heading format.
+
+## D-0006: Append-Only, One-Response-Lag Logging
+- Status: Accepted
+- Requested by: User
+- Implemented by: Codex
+- Rationale: To avoid full-file rewrites and platform timing limits, `docs/CODEX_LOG.md` should be maintained by appending only missing exchanges, using one-response-lag updates when necessary.
+
+## D-0007: Halt-Until-Resume Control
+- Status: Accepted
+- Requested by: User
+- Implemented by: Codex
+- Rationale: Project implementation work must pause on explicit halt instructions and resume only after explicit user authorization.
+
+## D-0008: Sensitive Data Redaction in Chat Logs
+- Status: Accepted
+- Requested by: User
+- Implemented by: Codex
+- Rationale: `docs/CODEX_LOG.md` must redact sensitive content (such as absolute filepaths and credentials) while preserving useful conversational traceability.
+
+## D-0009: Git Authority Separation
+- Status: Accepted
+- Requested by: User
+- Implemented by: Codex
+- Rationale: Git authority is split to keep developer control over push operations and untracked staging, while allowing Codex to commit only when explicitly requested.

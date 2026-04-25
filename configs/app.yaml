@@ -1,0 +1,9 @@
+app:
+  name: ReceiptProcessor
+  environment: dev
+
+pipeline:
+  input_dir: data/inbox
+  output_file: data/output/Expenses.csv
+  model_file: models/model.csv
+  example_file: models/example.csv

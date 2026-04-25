@@ -1,0 +1,10 @@
+filename_inference:
+  enabled: true
+  date_patterns:
+    - "YYYY-MM-DD"
+    - "YYYY_MM_DD"
+  amount_pattern: "decimal_with_two_places"
+
+ocr:
+  provider: tesseract
+  language: eng

@@ -1,0 +1,8 @@
+controls:
+  require_human_approval_before_changes: true
+  preserve_original_files: true
+  route_low_confidence_to_review: true
+
+thresholds:
+  minimum_auto_accept_confidence: 0.85
+  require_manual_review_below: 0.70
