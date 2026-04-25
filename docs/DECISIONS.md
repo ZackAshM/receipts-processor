@@ -59,3 +59,9 @@
 - Requested by: User
 - Implemented by: Codex
 - Rationale: The pipeline should support optional notes context and reliably flag null-result and contradiction cases without requiring an LLM API in the baseline branch.
+
+## D-0011: Per-User Structured Performance Logging
+- Status: Accepted
+- Requested by: User
+- Implemented by: Codex
+- Rationale: Runtime JSONL telemetry per user improves app performance evaluation and debugging while keeping logs local and operationally focused.

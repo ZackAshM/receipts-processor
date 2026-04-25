@@ -14,6 +14,7 @@ I defined the architecture below and used Codex to scaffold and implement compon
 6. Map parsed fields onto model columns.
 7. Score confidence and validate required fields.
 8. Export accepted and exception records to final output format with spreadsheet-safe sanitization.
+9. Emit structured per-user runtime logs for run-level and receipt-level performance diagnostics.
 
 ## Layered Modules
 

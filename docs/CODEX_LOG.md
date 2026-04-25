@@ -537,3 +537,21 @@ No LLM API was required for this implementation.
 
 # User
 Quick question, what is .env.example and why are you not ignoring it?
+
+---
+
+# Codex
+`.env.example` is a **safe template file** that documents expected environment variables (keys only, no real secrets), so teammates know what to set in their local `.env`.
+
+I’m not ignoring it because it should be committed to the repo as documentation.  
+We ignore real env files instead:
+- `.env`
+- `.env.*`
+- while explicitly keeping `!.env.example` tracked.
+
+So: **real secrets are ignored, template is versioned.**
+
+---
+
+# User
+Can you add a logging mechanism that will store logs per-user of the app performance. This will be useful for performance evaluation and debugging. I assume some sort of `logs` directory that will be empty when the user first installs and get filled as the user uses the app. But modify this interpretation if there's a more "correct" or "accepted" approach for this kind of feature.

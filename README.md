@@ -21,6 +21,7 @@ I am building a receipt-to-expense pipeline that:
 - Automatic summary row generation (`Total:`) aligned to template columns.
 - Spreadsheet formula-injection sanitization for exported cell values.
 - Null-result and contradiction flagging with sidecar exception export (`*_exceptions.csv`).
+- Per-user structured runtime logs for performance/debugging (`logs/users/<user_id>/...jsonl`).
 
 ## What I Directed
 
@@ -50,7 +51,8 @@ PYTHONPATH=src python -m receipt_processor.cli build-expenses \
   --input-dir data/inbox \
   --model-file models/model.csv \
   --example-file models/example.csv \
-  --output-file data/output/Expenses.csv
+  --output-file data/output/Expenses.csv \
+  --log-dir logs
 ```
 
 ## Product Management Evidence

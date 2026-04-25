@@ -24,6 +24,7 @@
 - Added optional notes-file ingestion (`notes.txt`, receipt-specific notes names) for extraction enrichment.
 - Added null-result flagging and contradiction detection between file text, filename inference, and notes context.
 - Added sidecar exception export (`*_exceptions.csv`) for flagged records.
+- Added per-user structured runtime logging in JSONL format for performance evaluation and debugging.
 
 ### Attribution
 - Direction and requirements defined by user.

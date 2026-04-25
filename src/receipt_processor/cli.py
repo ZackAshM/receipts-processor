@@ -15,6 +15,10 @@ def build_expenses(
     model_file: Path = typer.Option(..., exists=True),
     example_file: Path = typer.Option(..., exists=True),
     output_file: Path = typer.Option(...),
+    log_dir: Path | None = typer.Option(
+        None,
+        help="Optional directory for structured performance logs.",
+    ),
 ) -> None:
     """Run the end-to-end extraction pipeline."""
     run_pipeline(
@@ -22,6 +26,7 @@ def build_expenses(
         model_file=model_file,
         example_file=example_file,
         output_file=output_file,
+        log_dir=log_dir,
     )
     typer.echo(f"Export complete: {output_file}")
 

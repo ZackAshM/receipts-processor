@@ -8,12 +8,14 @@
 4. Choose `models/model.csv` or `models/model.xlsx`.
 5. Run CLI command to generate output file.
 6. Review low-confidence rows and the sidecar exception file (`*_exceptions.csv`) for null/contradiction flags.
+7. Review runtime logs under `logs/users/<user_id>/performance-YYYY-MM-DD.jsonl` for performance/debug diagnostics.
 
 ## Security Controls in Runtime
 
 - Export sanitization neutralizes spreadsheet formula prefixes (`=`, `+`, `-`, `@`, tab, carriage return).
 - Chat logs and governance artifacts use redaction rules for sensitive values.
 - Do not place credentials in filenames, receipt images, or prompt text.
+- Runtime logs intentionally avoid raw receipt text and focus on operational metadata.
 
 ## Human-in-the-Loop Controls
 

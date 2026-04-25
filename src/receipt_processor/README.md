@@ -9,3 +9,4 @@ Contents:
 - `io/`: file discovery, template loading, export, and sanitization.
 - `extraction/`: OCR abstraction and field extraction/inference.
 - `quality/`: confidence scoring, validation, and exception queue helpers.
+- `observability/`: structured runtime logging for performance/debugging.

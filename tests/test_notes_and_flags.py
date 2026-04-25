@@ -63,6 +63,7 @@ def test_pipeline_uses_notes_for_missing_fields(tmp_path: Path) -> None:
         model_file=Path("models/model.csv"),
         example_file=Path("models/example.csv"),
         output_file=output,
+        log_dir=tmp_path / "logs",
     )
 
     rows = _read_csv_rows(output)
@@ -93,6 +94,7 @@ def test_pipeline_flags_null_and_contradictory_results(tmp_path: Path) -> None:
         model_file=Path("models/model.csv"),
         example_file=Path("models/example.csv"),
         output_file=output,
+        log_dir=tmp_path / "logs",
     )
 
     rows = _read_csv_rows(output)
@@ -103,3 +105,35 @@ def test_pipeline_flags_null_and_contradictory_results(tmp_path: Path) -> None:
     issue_types = {row["issue_type"] for row in exceptions}
     assert "no_relevant_information" in issue_types
     assert "contradiction_detected" in issue_types
+
+
+def test_pipeline_emits_per_user_runtime_logs(tmp_path: Path, monkeypatch) -> None:
+    inbox = tmp_path / "inbox"
+    inbox.mkdir()
+    (inbox / "lyft.png").write_bytes(b"not-an-image")
+    (inbox / "lyft_notes.txt").write_text(
+        "vendor: Lyft\ndate: 2025-06-25\namount: 54.91\nexpense_type: Transportation\n",
+        encoding="utf-8",
+    )
+
+    monkeypatch.setenv("RECEIPT_PROCESSOR_USER_ID", "qa_user")
+
+    output = tmp_path / "Expenses.csv"
+    logs_dir = tmp_path / "logs"
+    run_pipeline(
+        input_dir=inbox,
+        model_file=Path("models/model.csv"),
+        example_file=Path("models/example.csv"),
+        output_file=output,
+        log_dir=logs_dir,
+    )
+
+    user_logs = logs_dir / "users" / "qa_user"
+    files = list(user_logs.glob("performance-*.jsonl"))
+    assert len(files) == 1
+
+    lines = files[0].read_text(encoding="utf-8").splitlines()
+    assert len(lines) >= 3
+    assert any("\"event_type\": \"run_started\"" in line for line in lines)
+    assert any("\"event_type\": \"receipt_processed\"" in line for line in lines)
+    assert any("\"event_type\": \"run_completed\"" in line for line in lines)
