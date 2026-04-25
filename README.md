@@ -124,8 +124,3 @@ I use the following files to show product ownership and decision quality:
 ## Attribution Model
 
 I am intentionally transparent that Codex is a tool in this project. I define direction and acceptance criteria, and Codex executes approved work under my governance rules.
-
-## User-Requested Changes (Current Session)
-
-- I requested that `docs/CODEX_LOG.md` and `docs/INIT_PROMPT.txt` be included in the docs structure.
-- I requested that `docs/CODEX_LOG.md` be continuously updated in the format I established.
