@@ -307,3 +307,56 @@ Include management handles on git:
 Only I, the developer, can make git push commands
 Only I, the developer, can git add untracked files/directories
 You, the assistant, can make commits, but only after request from the developer
+
+---
+
+# Codex
+Implemented. I added your git management controls to governance docs and kept implementation work halted.
+
+Updated files:
+- [agent/HUMAN_APPROVAL_POLICY.md](<REDACTED_ABSOLUTE_PATH>)
+  - Added `Git Authority Controls` with your exact rules.
+- [agent/GUARDRAILS.md](<REDACTED_ABSOLUTE_PATH>)
+  - Added technical guardrails for `git push`, `git add` (untracked), and commit restrictions.
+- [agent/PROMPT_PROTOCOL.md](<REDACTED_ABSOLUTE_PATH>)
+  - Added traceability rule enforcing those git boundaries.
+- [docs/DECISIONS.md](<REDACTED_ABSOLUTE_PATH>)
+  - Added `D-0009: Git Authority Separation`.
+- [docs/CHANGELOG.md](<REDACTED_ABSOLUTE_PATH>)
+  - Recorded this as a user-requested adjustment.
+- [docs/CODEX_LOG.md](<REDACTED_ABSOLUTE_PATH>)
+  - Appended prior exchange per one-response-lag, append-only process.
+
+I will now enforce:
+- No `git push` by me.
+- No `git add` of untracked files/directories by me.
+- Commits by me only when you explicitly request a commit.
+
+---
+
+# User
+Update .gitignore rules for env variants (.env.*) and common secret artifacts (*.pem, *.key, secrets.*)
+
+---
+
+# Codex
+Updated `.gitignore` with your requested rules.
+
+Changes made in [`.gitignore`](.gitignore):
+- Added `.env.*`
+- Kept `.env.example` tracked via `!.env.example`
+- Added `*.pem`
+- Added `*.key`
+- Added `secrets.*`
+
+I also appended the prior exchange to [`docs/CODEX_LOG.md`](docs/CODEX_LOG.md) using the append-only, one-response-lag process.
+
+---
+
+# User
+Ok, let's finally move onto content filling.
+
+While doing so,
+
+1. Avoid security risks, such as spreadsheet formula injection risk in exported CSV/XLSX. (User-controlled strings flow from filename parsing into export without sanitization: filename_inference.py (line 21), pipeline.py (line 31), exporter.py (line 15), exporter.py (line 18). A filename/value beginning with =, +, -, or @ can become an executable spreadsheet formula.)
+2. Add a README.md to each substantial subfolder that clearly explains the purpose of the subfolder and its contents.
