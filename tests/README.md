@@ -9,3 +9,4 @@ Contents:
 - `test_exporter.py`: export behavior and spreadsheet injection sanitization.
 - `test_notes_and_flags.py`: notes ingestion and null/contradiction flagging.
 - `test_runtime_logger.py`: per-user runtime logging behavior.
+- `test_risk_controls_and_exceptions.py`: confidence-threshold routing and exception CSV sanitization.

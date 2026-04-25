@@ -21,7 +21,9 @@ I am building a receipt-to-expense pipeline that:
 - Automatic summary row generation (`Total:`) aligned to template columns.
 - Spreadsheet formula-injection sanitization for exported cell values.
 - Null-result and contradiction flagging with sidecar exception export (`*_exceptions.csv`).
+- Low-confidence routing enforced via `configs/risk_controls.yaml` thresholds.
 - Per-user structured runtime logs for performance/debugging (`logs/users/<user_id>/...jsonl`).
+- Optional log privacy mode to mask identifiers in runtime telemetry.
 
 ## What I Directed
 
@@ -52,7 +54,8 @@ PYTHONPATH=src python -m receipt_processor.cli build-expenses \
   --model-file models/model.csv \
   --example-file models/example.csv \
   --output-file data/output/Expenses.csv \
-  --log-dir logs
+  --log-dir logs \
+  --risk-controls-file configs/risk_controls.yaml
 ```
 
 ## Usage Guide (For End Users)
@@ -77,7 +80,8 @@ PYTHONPATH=src python -m receipt_processor.cli build-expenses \
   --model-file models/model.csv \
   --example-file models/example.csv \
   --output-file data/output/Expenses.csv \
-  --log-dir logs
+  --log-dir logs \
+  --risk-controls-file configs/risk_controls.yaml
 ```
 
 Use a custom receipts folder:
@@ -88,7 +92,8 @@ PYTHONPATH=src python -m receipt_processor.cli build-expenses \
   --model-file models/model.csv \
   --example-file models/example.csv \
   --output-file /path/to/output/Expenses.csv \
-  --log-dir logs
+  --log-dir logs \
+  --risk-controls-file configs/risk_controls.yaml
 ```
 
 ### 3) Review outputs

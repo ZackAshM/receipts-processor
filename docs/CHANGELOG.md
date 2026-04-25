@@ -25,6 +25,9 @@
 - Added null-result flagging and contradiction detection between file text, filename inference, and notes context.
 - Added sidecar exception export (`*_exceptions.csv`) for flagged records.
 - Added per-user structured runtime logging in JSONL format for performance evaluation and debugging.
+- Added spreadsheet sanitization for exception sidecar CSV exports.
+- Enforced low-confidence routing using loaded runtime thresholds from `configs/risk_controls.yaml`.
+- Added optional log privacy mode to mask user/file identifiers in telemetry.
 
 ### Attribution
 - Direction and requirements defined by user.

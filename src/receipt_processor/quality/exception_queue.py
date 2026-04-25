@@ -6,6 +6,8 @@ import csv
 
 from pathlib import Path
 
+from receipt_processor.io.sanitization import sanitize_spreadsheet_cell
+
 
 def build_exception_record(
     receipt_path: Path,
@@ -35,4 +37,9 @@ def export_exception_records(exception_records: list[dict], output_file: Path) -
     with output_file.open("w", encoding="utf-8", newline="") as handle:
         writer = csv.DictWriter(handle, fieldnames=fieldnames, extrasaction="ignore")
         writer.writeheader()
-        writer.writerows(exception_records)
+        for record in exception_records:
+            sanitized = {
+                key: sanitize_spreadsheet_cell(value)
+                for key, value in record.items()
+            }
+            writer.writerow(sanitized)

@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import os
 from datetime import UTC, datetime
 from pathlib import Path
 from time import perf_counter
 
+from receipt_processor.config.risk_controls import load_risk_controls
 from receipt_processor.extraction.filename_inference import infer_fields_from_filename
 from receipt_processor.extraction.notes_inference import infer_fields_from_notes
 from receipt_processor.extraction.ocr_router import extract_text
@@ -44,10 +46,18 @@ def run_pipeline(
     example_file: Path,
     output_file: Path,
     log_dir: Path | None = None,
+    risk_controls_file: Path | None = None,
 ) -> None:
     """Extract receipt data and export records in model format."""
     run_started = perf_counter()
     logger = RuntimeLogger(log_dir=log_dir)
+    env_controls_path = os.environ.get("RECEIPT_PROCESSOR_RISK_CONTROLS_FILE", "").strip()
+    controls_path = (
+        risk_controls_file
+        or (Path(env_controls_path) if env_controls_path else None)
+        or Path("configs/risk_controls.yaml")
+    )
+    risk_controls = load_risk_controls(controls_path)
 
     model_columns = load_model_columns(model_file)
     template_hints = infer_template_hints(model_file, example_file)
@@ -65,6 +75,10 @@ def run_pipeline(
             "model_file": model_file.name,
             "example_file": example_file.name,
             "output_file": output_file.name,
+            "risk_controls_file": controls_path.name if controls_path.exists() else "default",
+            "minimum_auto_accept_confidence": risk_controls.minimum_auto_accept_confidence,
+            "require_manual_review_below": risk_controls.require_manual_review_below,
+            "route_low_confidence_to_review": risk_controls.route_low_confidence_to_review,
         },
     )
 
@@ -144,7 +158,8 @@ def run_pipeline(
                 continue
 
             record = map_to_model_columns(parsed, model_columns, template_hints)
-            record["_confidence"] = str(calculate_confidence(record))
+            confidence = calculate_confidence(record)
+            record["_confidence"] = str(confidence)
 
             is_valid, errors = validate_expense_record(record)
             if not is_valid:
@@ -161,6 +176,48 @@ def run_pipeline(
                 )
                 continue
 
+            if (
+                risk_controls.route_low_confidence_to_review
+                and confidence < risk_controls.minimum_auto_accept_confidence
+            ):
+                review_level = (
+                    "required"
+                    if confidence < risk_controls.require_manual_review_below
+                    else "recommended"
+                )
+                low_confidence_record = dict(record)
+                low_confidence_record["issue_type"] = "low_confidence"
+                low_confidence_record["details"] = (
+                    f"confidence={confidence:.4f} below minimum_auto_accept="
+                    f"{risk_controls.minimum_auto_accept_confidence:.4f}"
+                )
+                low_confidence_record["review_level"] = review_level
+                exception_rows.append(
+                    build_exception_record(
+                        receipt_path=receipt_path,
+                        record=low_confidence_record,
+                        errors=["Low confidence extraction result"],
+                    )
+                )
+                logger.emit(
+                    "receipt_flagged",
+                    {
+                        "source_file": receipt_path.name,
+                        "status": "low_confidence",
+                        "duration_ms": round((perf_counter() - receipt_started) * 1000, 2),
+                        "matched_notes_files": matched_note_files,
+                        "confidence": confidence,
+                        "minimum_auto_accept_confidence": (
+                            risk_controls.minimum_auto_accept_confidence
+                        ),
+                        "require_manual_review_below": (
+                            risk_controls.require_manual_review_below
+                        ),
+                        "review_level": review_level,
+                    },
+                )
+                continue
+
             mapped_rows.append(record)
             logger.emit(
                 "receipt_processed",
@@ -169,7 +226,7 @@ def run_pipeline(
                     "status": "processed",
                     "duration_ms": round((perf_counter() - receipt_started) * 1000, 2),
                     "matched_notes_files": matched_note_files,
-                    "confidence": record.get("_confidence", ""),
+                    "confidence": confidence,
                 },
             )
         except Exception as exc:

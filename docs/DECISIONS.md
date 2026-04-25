@@ -65,3 +65,15 @@
 - Requested by: User
 - Implemented by: Codex
 - Rationale: Runtime JSONL telemetry per user improves app performance evaluation and debugging while keeping logs local and operationally focused.
+
+## D-0012: Exception Export Sanitization Parity
+- Status: Accepted
+- Requested by: User
+- Implemented by: Codex
+- Rationale: Exception CSV exports must apply spreadsheet-safety sanitization equivalent to main exports to prevent formula injection from untrusted values.
+
+## D-0013: Enforced Risk Controls at Runtime
+- Status: Accepted
+- Requested by: User
+- Implemented by: Codex
+- Rationale: Confidence thresholds defined in `configs/risk_controls.yaml` must be enforced in pipeline routing so low-confidence records are queued for review.

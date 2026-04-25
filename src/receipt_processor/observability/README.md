@@ -9,3 +9,4 @@ Contents:
 Behavior:
 - Logs are written at runtime to `logs/users/<user_id>/performance-YYYY-MM-DD.jsonl`.
 - Output is metadata-focused (no raw receipt text) to reduce sensitive-data exposure.
+- Optional privacy mode (`RECEIPT_PROCESSOR_LOG_PRIVACY_MODE=redacted`) masks user IDs and source filenames in log events.

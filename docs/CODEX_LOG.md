@@ -601,3 +601,62 @@ This gives you the install behavior you wanted: logs are effectively “empty”
 
 # User
 Can you add to the parent README.md a usage guide? For instance, if I'm a user, I currently do not know where to put my folder of receipts or if it even matters where. And once I have my folder of receipts, how do I run this app in order to get the expenses file
+
+---
+
+# Codex
+Done. I added a clear end-user usage guide to the root README with:
+
+- where receipts can go (`data/inbox` or any custom folder),
+- optional notes file conventions (`notes.txt`, `<receipt_name>_notes.txt`),
+- exact commands for default and custom-folder runs,
+- and where to find outputs (`Expenses.csv`, `Expenses_exceptions.csv`, logs).
+
+Updated file: `README.md`
+
+---
+
+# User
+I ran the current project through a separate reviewer that came back with:
+
+```
+**Findings (Priority Order)**
+1. `[P1]` Exception export is not spreadsheet-sanitized, so formula injection is still possible in the sidecar CSV.  
+Main export sanitizes cells in [exporter.py:79](<REDACTED_ABSOLUTE_PATH>), but exception rows are written raw in [exception_queue.py:35](<REDACTED_ABSOLUTE_PATH>). Contradiction details can include untrusted values from filenames/notes in [pipeline.py:129](<REDACTED_ABSOLUTE_PATH>).
+
+2. `[P1]` Configured risk thresholds are not enforced in runtime logic.  
+Policy says low-confidence routing is required in [risk_controls.yaml:4](<REDACTED_ABSOLUTE_PATH>) with thresholds in [risk_controls.yaml:7](<REDACTED_ABSOLUTE_PATH>), but pipeline only computes confidence in [pipeline.py:147](<REDACTED_ABSOLUTE_PATH>) and never gates/queues by threshold.
+
+3. `[P2]` Runtime logs can contain identifying metadata (user ID + source filename).  
+User ID is persisted in log events in [runtime_logger.py:69](<REDACTED_ABSOLUTE_PATH>), and source filenames are logged in [pipeline.py:115](<REDACTED_ABSOLUTE_PATH>). This may be a privacy/compliance concern depending on receipt naming conventions.
+
+4. `[P2]` “Runtime configuration” docs exist, but config files are effectively passive right now.  
+`configs/` is documented as runtime controls in [configs/README.md:4](<REDACTED_ABSOLUTE_PATH>), but current code path does not load these YAML controls.
+
+5. `[P2]` No CI quality/security gate detected.  
+I did not find a `.github/workflows` pipeline; quality/security checks depend on manual execution.
+
+6. `[P3]` Dependency governance is still early-stage.  
+Dependencies are open ranges in [requirements.txt:1](<REDACTED_ABSOLUTE_PATH>) and [pyproject.toml:11](<REDACTED_ABSOLUTE_PATH>), with no lockfile/SBOM/audit pipeline.
+
+**Status Snapshot**
+- Codebase maturity: solid phase-1 implementation (OCR routing, parsing, notes inference, mapping, export, exception flow, telemetry).
+- Test status: `19 passed in 0.26s` when run as `PYTHONPATH=src .venv/bin/python -m pytest -q`.  
+- Test ergonomics: test collection fails without `PYTHONPATH=src` (`ModuleNotFoundError` on package imports).
+- Repo hygiene: clean working tree on `main`, 7 commits.
+- Governance/docs: strong coverage (PRD, architecture, decisions, runbook, guardrails), but some policy-to-runtime drift (notably confidence thresholds).
+- Security posture: improved and intentional, but not production-complete due exception-export sanitization gap and metadata logging exposure.
+
+**Overall Production PM Verdict**
+Pre-production / pilot-ready, but **not yet production-ready** due the two P1 items (exception CSV sanitization + unenforced low-confidence controls).
+
+**Highest-Impact Additions**
+1. Sanitize exception CSV output exactly like main export.  
+2. Enforce confidence thresholds from config in pipeline routing.  
+3. Add CI (tests + lint + security scan + dependency audit).  
+4. Add a lockfile/version pin strategy and automated vuln checks.  
+5. Add privacy mode for logs (hash/suppress `user_id` + `source_file`).  
+6. Add one end-to-end smoke test run in CI to validate real CLI behavior.
+```
+
+Could you address the most pressing issues presented? Some findings may be a misunderstanding, so decide on what's needed vs not needed.

@@ -19,6 +19,10 @@ def build_expenses(
         None,
         help="Optional directory for structured performance logs.",
     ),
+    risk_controls_file: Path | None = typer.Option(
+        None,
+        help="Optional YAML file for confidence routing controls.",
+    ),
 ) -> None:
     """Run the end-to-end extraction pipeline."""
     run_pipeline(
@@ -27,6 +31,7 @@ def build_expenses(
         example_file=example_file,
         output_file=output_file,
         log_dir=log_dir,
+        risk_controls_file=risk_controls_file,
     )
     typer.echo(f"Export complete: {output_file}")
 
