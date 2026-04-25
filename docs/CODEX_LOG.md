@@ -360,3 +360,180 @@ While doing so,
 
 1. Avoid security risks, such as spreadsheet formula injection risk in exported CSV/XLSX. (User-controlled strings flow from filename parsing into export without sanitization: filename_inference.py (line 21), pipeline.py (line 31), exporter.py (line 15), exporter.py (line 18). A filename/value beginning with =, +, -, or @ can become an executable spreadsheet formula.)
 2. Add a README.md to each substantial subfolder that clearly explains the purpose of the subfolder and its contents.
+
+---
+
+# Codex
+Implemented both requested items.
+
+### 1. Spreadsheet formula-injection protection
+I added export-time sanitization so untrusted text cannot execute as formulas in CSV/XLSX.
+
+Changes:
+- `src/receipt_processor/io/sanitization.py`
+  - Added `sanitize_spreadsheet_cell()` with dangerous-prefix checks (`=`, `+`, `-`, `@`, tab, carriage return).
+  - Risky string cells are prefixed with `'` to force literal text.
+- `src/receipt_processor/io/exporter.py`
+  - Sanitization now runs across all output cells before writing CSV/XLSX.
+- `tests/test_exporter.py`
+  - Added tests for prefix blocking and CSV/XLSX sanitization behavior.
+
+This addresses the flow you identified from filename-derived values through pipeline to export.
+
+### 2. README.md for substantial subfolders
+Added folder-purpose READMEs in:
+- `agent/README.md`
+- `configs/README.md`
+- `data/README.md`
+- `data/inbox/README.md`
+- `data/processed/README.md`
+- `data/output/README.md`
+- `docs/README.md`
+- `models/README.md`
+- `src/README.md`
+- `src/receipt_processor/README.md`
+- `src/receipt_processor/io/README.md`
+- `src/receipt_processor/extraction/README.md`
+- `src/receipt_processor/quality/README.md`
+- `tests/README.md`
+
+Note: `template/` is not present in the current repo, so no README was added there.
+
+### Verification
+- `python3 -m compileall src` succeeded.
+- `pytest` could not run in this environment because `pytest` is not installed (`No module named pytest`).
+
+---
+
+# User
+Ok, please move forward to filling in the project contents to achieve the project goal.
+
+---
+
+# Codex
+Implemented. The project now has real end-to-end content instead of placeholders, and it’s aligned to your receipt-processing goal.
+
+**What’s now implemented**
+- Real file extraction flow:
+  - PDF text extraction via `pypdf`
+  - Image OCR via `pytesseract` + `Pillow`
+- Real receipt parsing:
+  - Date extraction
+  - Total/amount extraction (priority on total-like lines)
+  - Vendor inference
+  - Expense type inference
+- Filename fallback inference:
+  - Date/amount/vendor extracted from filenames when receipt text is incomplete
+- Template-aware mapping:
+  - Uses `model` + `example` to infer target column roles and formatting
+  - Applies date and currency formatting consistent with template examples
+- Export shaping:
+  - Writes CSV/XLSX without pandas dependency
+  - Preserves model column order
+  - Adds blank row + `Total:` summary row (when template columns support it)
+- Security:
+  - Spreadsheet formula injection sanitization is enforced at export time
+- Validation:
+  - Required checks now work against alias/model column names (not just lowercase internal names)
+
+**Key code areas updated**
+- `src/receipt_processor/extraction/ocr_router.py`
+- `src/receipt_processor/extraction/receipt_parser.py`
+- `src/receipt_processor/extraction/filename_inference.py`
+- `src/receipt_processor/extraction/schema_mapper.py`
+- `src/receipt_processor/io/template_loader.py`
+- `src/receipt_processor/io/exporter.py`
+- `src/receipt_processor/pipeline.py`
+- `src/receipt_processor/quality/validation.py`
+
+**Tests/content added**
+- Added/updated tests for parsing, template hints, validation, export sanitization, and totals:
+  - `tests/test_exporter.py`
+  - `tests/test_extraction_parsing.py`
+  - `tests/test_template_and_validation.py`
+
+**Docs updated**
+- README now reflects actual current capabilities and secure behavior.
+- Architecture/operations/changelog updated to reflect implemented pipeline and controls.
+
+**Verification performed**
+- End-to-end smoke test (filename-only inference path) succeeded and generated model-shaped CSV with a correct total row.
+- `python3 -m compileall src tests` succeeded.
+- Full `pytest` run could not be executed because `pytest` is not installed in this runtime.
+
+1. If you want, next I can implement a small confidence/exceptions report file (for review queue quality).
+2. I can also add a sample `data/inbox` demo pack + deterministic golden-output tests for portfolio-grade demonstrations.
+
+---
+
+# User
+You can request to install packages if you need (in this venv)
+
+---
+
+# Codex
+Perfect timing. I used that permission and completed setup in `.venv`:
+
+- Installed dependencies from `requirements.txt` into `.venv`
+- Ran test suite with `PYTHONPATH=src .venv/bin/python -m pytest -q`
+- Result: **12 passed** (`12 passed in 1.81s`)
+
+So the environment is now ready for faster iteration while we continue filling out product content.
+
+---
+
+# User
+Ok, let me know if you can add these features:
+1. The ability to idenitify an optional "notes.txt" or familiar name that contains additional information that can be relevant for information extraction.
+2. The ability to handle or flag null results (i.e. no relevant nformation found in a file or its filename).
+3. The ability to handle or flag Contradicting information (i.e. if the file and filename do not match).
+
+If an LLM api is needed for one of these, let me know and we'll hold off on that one for now. I will want us to implement LLM abilities in a branch later on.
+
+---
+
+# Codex
+Implemented. All three features are now in place with a non-LLM approach, and tests are passing.
+
+**What I added**
+- Optional notes context ingestion:
+  - Supports `notes.txt`, `note.txt`, `<receipt>.txt`, `<receipt>_notes.txt`, `<receipt>-notes.txt`, `<receipt>.notes.txt`, plus token-overlap “familiar note” names.
+  - Parses explicit key-value lines (`vendor:`, `date:`, `amount:`, etc.) and heuristic fallback.
+  - File: `src/receipt_processor/extraction/notes_inference.py`
+
+- Null-result handling/flagging:
+  - If no core fields are found from file text + filename + notes, the record is flagged as `no_relevant_information`.
+  - Files: `src/receipt_processor/quality/consistency.py`, `src/receipt_processor/pipeline.py`
+
+- Contradiction handling/flagging:
+  - Detects mismatches across file/filename/notes for date, amount, and vendor.
+  - Contradictions are flagged as `contradiction_detected`.
+  - Files: `src/receipt_processor/quality/consistency.py`, `src/receipt_processor/pipeline.py`
+
+- Exception sidecar output:
+  - Flagged records are exported to `*_exceptions.csv` (for review queue).
+  - File: `src/receipt_processor/quality/exception_queue.py`
+
+**Pipeline integration**
+- Source merge priority is now: `filename < notes < file text`.
+- Notes and contradiction/null checks are integrated before mapping/validation.
+- File: `src/receipt_processor/pipeline.py`
+
+**Docs updated**
+- Capability/ops/changelog/decision updates:
+  - `README.md`
+  - `docs/OPERATIONS.md`
+  - `docs/CHANGELOG.md`
+  - `docs/DECISIONS.md` (`D-0010`)
+
+**Validation**
+- Ran tests in venv:
+  - `PYTHONPATH=src .venv/bin/python -m pytest -q`
+  - Result: **16 passed**.
+
+No LLM API was required for this implementation.
+
+---
+
+# User
+Quick question, what is .env.example and why are you not ignoring it?

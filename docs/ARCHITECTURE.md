@@ -10,9 +10,10 @@ I defined the architecture below and used Codex to scaffold and implement compon
 2. Route each file through OCR/text extraction.
 3. Parse extracted text into normalized expense fields.
 4. Infer missing fields from filename patterns.
-5. Map parsed fields onto model columns.
-6. Score confidence and validate required fields.
-7. Export accepted and exception records to final output format.
+5. Infer formatting and column-role hints from `model` + `example` templates.
+6. Map parsed fields onto model columns.
+7. Score confidence and validate required fields.
+8. Export accepted and exception records to final output format with spreadsheet-safe sanitization.
 
 ## Layered Modules
 

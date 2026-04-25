@@ -10,6 +10,18 @@ I am building a receipt-to-expense pipeline that:
 - Uses filename hints when receipt content is incomplete.
 - Produces `Expenses.xlsx` or `Expenses.csv` matching a provided model template.
 
+## Current Capabilities
+
+- PDF text extraction via `pypdf`.
+- Image OCR via `pytesseract` + `Pillow`.
+- Rule-based extraction for date, vendor, and total amount.
+- Filename-based fallback inference for date/amount/vendor.
+- Optional notes context via `notes.txt` or receipt-specific `*_notes.txt`.
+- Model/example-driven output shaping (for date/currency style and column mapping).
+- Automatic summary row generation (`Total:`) aligned to template columns.
+- Spreadsheet formula-injection sanitization for exported cell values.
+- Null-result and contradiction flagging with sidecar exception export (`*_exceptions.csv`).
+
 ## What I Directed
 
 I directed these core requirements:
@@ -34,7 +46,7 @@ I directed these core requirements:
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
-python -m receipt_processor.cli build-expenses \
+PYTHONPATH=src python -m receipt_processor.cli build-expenses \
   --input-dir data/inbox \
   --model-file models/model.csv \
   --example-file models/example.csv \

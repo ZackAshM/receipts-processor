@@ -18,6 +18,12 @@
 - Added explicit halt-until-resume control to governance documentation.
 - Redacted sensitive data in `docs/CODEX_LOG.md` (including absolute filepaths) and codified ongoing log sanitization rules.
 - Added git authority guardrails: developer-only `git push`, developer-only staging of untracked files/directories, and commit creation by Codex only on explicit developer request.
+- Implemented core extraction pipeline content: PDF/image text extraction, rule-based parsing, filename fallback inference, and model/example-driven schema mapping.
+- Implemented spreadsheet formula-injection defenses at export time.
+- Added subfolder `README.md` files to document purpose and contents across major project areas.
+- Added optional notes-file ingestion (`notes.txt`, receipt-specific notes names) for extraction enrichment.
+- Added null-result flagging and contradiction detection between file text, filename inference, and notes context.
+- Added sidecar exception export (`*_exceptions.csv`) for flagged records.
 
 ### Attribution
 - Direction and requirements defined by user.

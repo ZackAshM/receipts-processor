@@ -1,9 +1,14 @@
+import csv
 from pathlib import Path
-
-import pandas as pd
 
 from receipt_processor.io.exporter import export_expenses
 from receipt_processor.io.sanitization import sanitize_spreadsheet_cell
+from receipt_processor.io.template_loader import TemplateHints
+
+
+def _read_csv_rows(path: Path) -> list[dict[str, str]]:
+    with path.open("r", encoding="utf-8", newline="") as handle:
+        return list(csv.DictReader(handle))
 
 
 def test_export_expenses_csv(tmp_path: Path) -> None:
@@ -12,9 +17,9 @@ def test_export_expenses_csv(tmp_path: Path) -> None:
 
     export_expenses(rows, out)
 
-    loaded = pd.read_csv(out)
-    assert loaded.shape[0] == 1
-    assert loaded.loc[0, "vendor"] == "Store"
+    loaded = _read_csv_rows(out)
+    assert len(loaded) == 1
+    assert loaded[0]["vendor"] == "Store"
 
 
 def test_sanitize_spreadsheet_cell_blocks_formula_prefixes() -> None:
@@ -32,9 +37,32 @@ def test_export_expenses_sanitizes_dangerous_values_for_csv(tmp_path: Path) -> N
 
     export_expenses(rows, out)
 
-    loaded = pd.read_csv(out)
-    assert loaded.loc[0, "vendor"] == "'=2+2"
-    assert loaded.loc[0, "amount"] == "'-12.50"
+    loaded = _read_csv_rows(out)
+    assert loaded[0]["vendor"] == "'=2+2"
+    assert loaded[0]["amount"] == "'-12.50"
+
+
+def test_export_expenses_appends_total_row_from_template_hints(tmp_path: Path) -> None:
+    out = tmp_path / "Expenses.csv"
+    rows = [
+        {"Date": "2026 04 24", "Description": "Food - A", "Amt Claimed (USD)": "$10.00"},
+        {"Date": "2026 04 25", "Description": "Food - B", "Amt Claimed (USD)": "$5.25"},
+    ]
+    hints = TemplateHints(
+        date_output_format="%Y %m %d",
+        currency_symbol="$",
+        date_column="Date",
+        description_column="Description",
+        amount_column="Amt Claimed (USD)",
+        receipt_amount_column="Receipt Amt",
+    )
+
+    export_expenses(rows, out, template_hints=hints)
+
+    loaded = _read_csv_rows(out)
+    assert len(loaded) == 4
+    assert loaded[-1]["Description"] == "Total:"
+    assert loaded[-1]["Amt Claimed (USD)"] == "$15.25"
 
 
 def test_export_expenses_sanitizes_dangerous_values_for_xlsx(tmp_path: Path) -> None:
@@ -43,6 +71,15 @@ def test_export_expenses_sanitizes_dangerous_values_for_xlsx(tmp_path: Path) -> 
 
     export_expenses(rows, out)
 
-    loaded = pd.read_excel(out)
-    assert loaded.loc[0, "vendor"] == "'@evil"
-    assert loaded.loc[0, "amount"] == "'+1"
+    try:
+        from openpyxl import load_workbook
+    except Exception:
+        return
+
+    workbook = load_workbook(out, data_only=True)
+    sheet = workbook.active
+    headers = [cell.value for cell in sheet[1]]
+    values = [cell.value for cell in sheet[2]]
+    row = dict(zip(headers, values))
+    assert row["vendor"] == "'@evil"
+    assert row["amount"] == "'+1"

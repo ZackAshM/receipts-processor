@@ -4,9 +4,16 @@
 
 1. Activate virtual environment.
 2. Place source receipts in `data/inbox`.
-3. Choose `models/model.csv` or `models/model.xlsx`.
-4. Run CLI command to generate output file.
-5. Review low-confidence and exception records.
+3. Optionally add contextual notes files (`notes.txt`, `<receipt>_notes.txt`) in the same folder.
+4. Choose `models/model.csv` or `models/model.xlsx`.
+5. Run CLI command to generate output file.
+6. Review low-confidence rows and the sidecar exception file (`*_exceptions.csv`) for null/contradiction flags.
+
+## Security Controls in Runtime
+
+- Export sanitization neutralizes spreadsheet formula prefixes (`=`, `+`, `-`, `@`, tab, carriage return).
+- Chat logs and governance artifacts use redaction rules for sensitive values.
+- Do not place credentials in filenames, receipt images, or prompt text.
 
 ## Human-in-the-Loop Controls
 

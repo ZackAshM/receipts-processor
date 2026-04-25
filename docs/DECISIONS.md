@@ -53,3 +53,9 @@
 - Requested by: User
 - Implemented by: Codex
 - Rationale: Git authority is split to keep developer control over push operations and untracked staging, while allowing Codex to commit only when explicitly requested.
+
+## D-0010: Notes Context and Anomaly Flagging (Non-LLM)
+- Status: Accepted
+- Requested by: User
+- Implemented by: Codex
+- Rationale: The pipeline should support optional notes context and reliably flag null-result and contradiction cases without requiring an LLM API in the baseline branch.
