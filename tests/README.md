@@ -12,3 +12,6 @@ Contents:
 - `test_notes_and_flags.py`: notes ingestion and null/contradiction flagging.
 - `test_runtime_logger.py`: runtime logging behavior and privacy-mode redaction.
 - `test_risk_controls_and_exceptions.py`: confidence-threshold routing and exception CSV sanitization.
+- `test_template_renderer.py`: model-template keyword and operation rendering behavior.
+- `test_structured_extraction_and_processing.py`: deterministic structured extraction and processing rules.
+- `test_detailed_json_output.py`: run-level detailed JSON sidecar emission.

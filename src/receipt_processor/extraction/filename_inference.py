@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 
 AMOUNT_PATTERN = re.compile(r"(?P<amount>\d+[\.,]\d{2})")
-DATE_PATTERN = re.compile(r"(?P<date>\d{4}[-_]\d{2}[-_]\d{2})")
+DATE_PATTERN = re.compile(r"(?P<date>(?:\d{4}[-_]\d{2}[-_]\d{2})|(?:\d{8}))")
 NOISE_TOKENS = {
     "receipt",
     "img",
@@ -34,6 +34,8 @@ def _clean_vendor_from_filename(filename: str) -> str:
             continue
         if stripped.isdigit():
             continue
+        if any(ch.isdigit() for ch in stripped):
+            continue
         filtered.append(stripped)
 
     if not filtered:
@@ -54,7 +56,11 @@ def infer_fields_from_filename(filename: str, current_fields: dict) -> dict[str,
 
     date_match = DATE_PATTERN.search(filename)
     if date_match and not current_fields.get("date"):
-        inferred["date"] = date_match.group("date").replace("_", "-")
+        raw_date = date_match.group("date")
+        if len(raw_date) == 8 and raw_date.isdigit():
+            inferred["date"] = f"{raw_date[0:4]}-{raw_date[4:6]}-{raw_date[6:8]}"
+        else:
+            inferred["date"] = raw_date.replace("_", "-")
 
     vendor = _clean_vendor_from_filename(filename)
     if vendor and not current_fields.get("vendor"):

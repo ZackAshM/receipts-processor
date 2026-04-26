@@ -10,8 +10,9 @@ __pycache__/
 *.pem
 *.key
 secrets.*
-logs/
 
+logs/
+!logs/.gitkeep
 data/inbox/
 data/processed/
 data/output/

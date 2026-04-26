@@ -7,6 +7,18 @@ from datetime import datetime
 
 CORE_FIELDS = ("date", "vendor", "amount")
 DATE_FORMATS = ("%Y-%m-%d", "%Y/%m/%d", "%Y_%m_%d", "%m/%d/%Y", "%m-%d-%Y")
+VENDOR_NOISE_TOKENS = {
+    "food",
+    "travel",
+    "transportation",
+    "office",
+    "expense",
+    "receipt",
+    "img",
+    "image",
+    "scan",
+    "screenshot",
+}
 
 
 def _normalize_vendor(value: str) -> str:
@@ -45,6 +57,18 @@ def _vendors_conflict(left: str, right: str) -> bool:
         return False
     if left_norm in right_norm or right_norm in left_norm:
         return False
+
+    def compact(value: str) -> str:
+        tokens = [token for token in value.split() if token not in VENDOR_NOISE_TOKENS]
+        return "".join(tokens)
+
+    left_compact = compact(left_norm)
+    right_compact = compact(right_norm)
+    if left_compact and right_compact:
+        if left_compact == right_compact:
+            return False
+        if left_compact in right_compact or right_compact in left_compact:
+            return False
     return True
 
 

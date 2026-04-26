@@ -46,6 +46,17 @@ def test_detect_contradictions_and_null_result() -> None:
     assert is_null_result({"vendor": "Store", "date": "", "amount": ""}) is False
 
 
+def test_detect_contradictions_tolerates_filename_noise_tokens() -> None:
+    contradictions = detect_contradictions(
+        {
+            "filename": {"vendor": "Food GreatBasinBakery"},
+            "file": {"vendor": "Great Basin Bakery"},
+            "notes": {},
+        }
+    )
+    assert not any("vendor mismatch" in item for item in contradictions)
+
+
 def test_pipeline_uses_notes_for_missing_fields(tmp_path: Path) -> None:
     inbox = tmp_path / "inbox"
     inbox.mkdir()

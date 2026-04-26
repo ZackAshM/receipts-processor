@@ -9,5 +9,6 @@ Contents:
 - `pipeline.py`: end-to-end orchestration.
 - `io/`: file discovery, template loading, export, and sanitization.
 - `extraction/`: OCR abstraction and field extraction/inference.
+- `processing/`: deterministic post-extraction calculations and run-level summaries.
 - `quality/`: confidence scoring, validation, and exception queue helpers.
 - `observability/`: structured runtime logging for performance/debugging.

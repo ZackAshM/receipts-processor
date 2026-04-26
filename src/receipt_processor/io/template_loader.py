@@ -91,6 +91,11 @@ def load_model_columns(model_file: Path) -> list[str]:
     raise ValueError(f"Unsupported model format: {model_file}")
 
 
+def load_model_rows(model_file: Path) -> list[dict[str, str]]:
+    """Load data rows (excluding header) from model template."""
+    return _read_rows(model_file)
+
+
 def _normalize_label(label: str) -> str:
     return re.sub(r"[^a-z0-9]+", " ", label.lower()).strip()
 

@@ -63,6 +63,7 @@ def _prepare_rows(
     rows: list[dict[str, object]],
     template_hints: TemplateHints | None,
     model_columns: list[str] | None,
+    append_summary_rows: bool = True,
 ) -> tuple[list[str], list[dict[str, object]]]:
     if not rows:
         return model_columns or [], []
@@ -70,7 +71,7 @@ def _prepare_rows(
     columns = [column for column in rows[0].keys() if not column.startswith("_")]
     prepared_rows = [{column: row.get(column, "") for column in columns} for row in rows]
 
-    if template_hints is not None:
+    if template_hints is not None and append_summary_rows:
         prepared_rows = _append_summary_rows(prepared_rows, template_hints)
 
     sanitized_rows: list[dict[str, object]] = []
@@ -108,10 +109,16 @@ def export_expenses(
     output_file: Path,
     template_hints: TemplateHints | None = None,
     model_columns: list[str] | None = None,
+    append_summary_rows: bool = True,
 ) -> None:
     """Write rows to CSV or XLSX based on output suffix."""
     output_file.parent.mkdir(parents=True, exist_ok=True)
-    columns, prepared_rows = _prepare_rows(rows, template_hints, model_columns)
+    columns, prepared_rows = _prepare_rows(
+        rows,
+        template_hints,
+        model_columns,
+        append_summary_rows=append_summary_rows,
+    )
     suffix = output_file.suffix.lower()
 
     if suffix == ".csv":

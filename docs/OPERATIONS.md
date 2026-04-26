@@ -8,8 +8,9 @@
 4. Choose `models/model.csv` or `models/model.xlsx`.
 5. Run CLI command to generate output file.
 6. Review low-confidence rows and the sidecar exception file (`*_exceptions.csv`) for null/contradiction flags.
-7. Review runtime logs under `logs/performance-YYYY-MM-DD.jsonl` for performance/debug diagnostics.
-8. Tune confidence routing in `configs/risk_controls.yaml` (or pass `--risk-controls-file`) as needed.
+7. Review detailed sidecar JSON (`*_detailed.json`) for extracted/processed fields, contribution itemization, and run summary totals.
+8. Review runtime logs under `logs/performance-YYYY-MM-DD.jsonl` for performance/debug diagnostics.
+9. Tune confidence routing in `configs/risk_controls.yaml` (or pass `--risk-controls-file`) as needed.
 
 ## Security Controls in Runtime
 

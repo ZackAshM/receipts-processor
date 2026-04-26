@@ -1074,3 +1074,346 @@ Natural next step:
 
 # User
 all right, I've staged it. Please update CODEX_LOG.md, add it, then commit the changes with an appropriate message
+
+---
+
+# Codex
+Done.
+
+- Updated `docs/CODEX_LOG.md` with the latest prior exchange.
+- Staged that file (`git add docs/CODEX_LOG.md`).
+- Committed all staged changes as:
+
+`699b7f5`  
+`Refactor runtime logging and add CI/security workflows`
+
+Repository is clean after commit.
+
+---
+
+# User
+All right, let's start implementing some improvements to this deterministic approach. I want the following capabilities:
+
+1. The data extraction should be able to recognize highlighted fields that represent contributions. If highlighted materials appear, it should mean non-highlighted items do not contribute to the total. By default, if no highlighted items are recognized, then it should consider all items as contributions.
+2. We should make the extraction more structured and detailed. Because there are many keywords, the data extractor should try to find all of the following (and more if you have suggestions), as an example:
+```
+{
+  "filename": "receipt1.pdf"
+  "document_type": "receipt", # could be "email", "statement"
+  "merchant_name": "Example Restaurant",
+  "transaction_date": "2026 04 26",
+  "transaction_type": "food",
+  "currency": "USD",
+  "contributing_items": {
+    "bread": 1.30,
+    "mocha":4.50,
+  }
+  "noncontributing_items": {
+    "wine": 69.99,
+  }
+  "subtotal": 42.00,
+  "tax": 3.36,
+  "tip": 9.00,
+  "service_charge": null,
+  "pre_tip_total": 45.36,
+  "amount_paid": 54.36,
+  "confidence": 0.94,
+  "needs_review": false,
+  "used_keywords": {
+    "subtotal": "Subtotal $42.00",
+    "tax": "Tax $3.36",
+    "tip": "Tip $9.00",
+    "amount_paid": "Amount Paid $54.36"
+  }
+}
+```
+These may not all get filled of course, but it should be attempted to be filled as much as possible.
+3. The detailed extraction should then go into a processor that will actually make the final values that end up going into the final csv or xlsx. This is what will do any required math to obtain things like "true_expense" = "subtotal" + "tax" + "tip" - "noncontributing_items", "receipt_expense" = "amount_paid", "description" = f'{"transaction_type"} - {"merchant_name"}', etc. 
+4. The detailed JSON should be returned as well, alongside the final csv/xlsx.
+
+The exact keywords can change as you see fit, but I hope this gives you a good idea of what results I'm looking for. This new structured approach of separating data extraction and data processing will be valuable for future features.
+
+---
+
+# Codex
+Your direction is clear, and this is a strong upgrade path for the deterministic system.
+
+I updated `docs/CODEX_LOG.md` for the one-response-lag policy before this reply.
+
+**Current understanding**
+1. You want a new structured extraction layer that captures detailed receipt semantics (merchant/date/type/currency/subtotal/tax/tip/items/etc).
+2. You want highlighted-item logic:
+   - If highlighted contributing items are detected, only highlighted items count as contributions.
+   - If no highlights are detected, default to all detected line items as contributions.
+3. You want a separate processing layer that computes final business values (`true_expense`, `receipt_expense`, description, etc.) from structured extraction.
+4. You want detailed JSON output alongside final CSV/XLSX.
+
+**Proposed implementation (no code changes yet)**
+1. Add a `structured extraction` module that outputs a rich per-receipt object with:
+   - `document_type`, `merchant_name`, `transaction_date`, `transaction_type`, `currency`
+   - `line_items` (+ contribution classification)
+   - `subtotal`, `tax`, `tip`, `service_charge`, `pre_tip_total`, `amount_paid`
+   - `used_keywords`, `confidence`, `needs_review`
+2. Add deterministic highlight detection for image-based OCR using text bounding boxes + color/background analysis around text regions.
+   - Practical note: robust highlight detection is feasible for images/screenshots.
+   - For PDFs without visual rendering support, we’ll default to non-highlight mode unless reliable highlight metadata can be detected.
+3. Add a separate `expense processor` module to compute final accounting fields from the structured object:
+   - `true_expense = subtotal + tax + tip + service_charge - noncontributing_total`
+   - `receipt_expense = amount_paid` fallback to derived totals
+   - `description = "<transaction_type> - <merchant_name>"`
+4. Keep current export flow, but feed it from processed results (not raw parser output).
+5. Export structured details as sidecar JSON:
+   - one run-level file, default: `Expenses_detailed.json`
+   - includes one object per source receipt
+6. Add tests for:
+   - highlight/no-highlight contribution rules
+   - keyword capture and field extraction
+   - processor math and fallbacks
+   - JSON sidecar emission and schema sanity
+
+**Files I expect to add/update**
+- New extraction module(s) for structured output and highlight-aware item classification
+- New processing module for deterministic math/business rules
+- Pipeline integration updates
+- CLI option support for JSON sidecar path (optional override)
+- Tests + README/docs updates
+
+If approved, I’ll implement this as a first deterministic phase with careful fallbacks and review flags where certainty is low.
+
+---
+
+# User
+Yes, with some modifications to your proposed implementation:
+1. Include the filename so we can match the file to the object.
+3. Keep in mind that the expense processor may consider what the model is looking for. You may want to add extra processed items to the detailed extraction first. Then the module in charge of creating the Expenses.csv will determine which entries to use and where based on the model.
+5. I think one JSON of the details (including additions of the processed items) will work for all receipts instead of a JSON for each receipt. Just keep each receipt detail object separate (ie {{receipt1_details}, {receipt2_details}, ...})
+
+Any ambiguities or tasks that need clarification? Or anything that you need an answer for in order to implement a specific way?
+
+---
+
+# Codex
+No blockers. I can implement with these defaults unless you want to override:
+
+1. Structured JSON shape  
+- One run-level file: `Expenses_detailed.json`  
+- Top-level object with `receipts: [ ... ]`  
+- Each receipt object includes `filename` plus extracted + processed fields.
+
+2. Model-aware processing flow  
+- Extraction module outputs rich raw fields.  
+- Processing module adds computed fields (`true_expense`, `receipt_expense`, totals, contribution sums, etc.).  
+- Export mapper then chooses fields based on model columns (so model drives final CSV/XLSX mapping).
+
+3. Highlight handling scope (deterministic)  
+- For images/screenshots: detect highlighted text regions and mark contribution items accordingly.  
+- If no highlight detected: all line items treated as contributing.  
+- For PDFs: attempt best-effort; if highlight signal is unavailable, fall back to “no highlight detected” behavior and set review hints in JSON.
+
+If these defaults work, I’m ready to implement immediately.
+
+---
+
+# User
+Yes, this will do. One last addition: since this is a deterministic approach, we perhaps need to lock in what the expected model looks like, now that we'll fill it in with keyword searches. So if we end up with someone who wants to make their own model, we should have the README.md in `models/` explain how to structure their desired output by using available keywords (and how to invoke that they are keywords to be used, with the assumption that all other text is just text to be copied). Do you agree, or am I misunderstanding something?
+
+---
+
+# Codex
+You’re exactly right, and I strongly agree.
+
+For a deterministic system, we should define a template contract in `models/README.md`:
+- Reserved keyword placeholders (I’ll default to `{{keyword_name}}` syntax).
+- All non-keyword text is treated as literal copied text.
+- Unknown keywords are flagged in review/validation.
+- A table of supported keywords (extracted + processed fields), plus examples.
+
+That gives users a reliable way to build custom models without ambiguity. I’ll include this in the implementation.
+
+---
+
+# User
+Ok, then before making the bigger changes, can you change the README.md right now, and afterwards, I will update the model to fit the intended structure.
+
+---
+
+# Codex
+Updated the models README now with the deterministic keyword-template contract:
+
+- `models/README.md`
+
+It now defines:
+- Placeholder syntax: `{{keyword_name}}`
+- Literal-text behavior
+- Supported keyword list (core, totals, processed, quality)
+- How to design custom model templates
+- Example row pattern
+
+If you meant the root README instead of `models/README.md`, say the word and I’ll update that next.
+
+---
+
+# User
+I realized a few things while changing the model. How does this app currently handle the `<EMPTY OR RECEIPT AMOUNT IF DIFFERENT FROM AMOUNT CLAIMED>`? Because this is not something I can represent clearly using this keyword approach. But I assume this was coded in a particular fashion anyway that isn't entirely flexible? Nonetheless, I want to keep something like this. It can be in the processing step or something, but I think it means we need a field that is empty if the true expense is equal to the receipt amount?
+
+Also, the supported keywords section should have explanations (not all of them are obvious / self-explanatory) especially in the "Processed fields" (by the way, remove the "business" part of that line).
+
+I would also like to track what items get considered "contributing" and not, so we need the line item name in addition to the totals and counts.
+
+This also doesn't cover things like "total of all receipts" like the original model presumes. So the detailed JSON needs a summary section OR there needs to be a clever way to process the actual total after the fact. For example, in addition to keywords, there can be operation words that assume a defined operation, for example `<total_expenses>` would mean add all the `{{true_expense}}` columns
+
+---
+
+# Codex
+You’re right on all points.
+
+Current behavior for `<EMPTY OR RECEIPT AMOUNT IF DIFFERENT FROM AMOUNT CLAIMED>` is already hardcoded in the mapper:
+- It writes receipt amount only if `receipt_amount` exists **and** differs from claimed amount (`schema_mapper.py:68`, `schema_mapper.py:91`).
+- So yes, conceptually it matches your intended “empty if equal” rule.
+
+I also updated the model contract docs now:
+- `models/README.md`
+
+Changes made there:
+- Added explanations for each supported keyword.
+- Renamed `Processed/business fields` to `Processed fields`.
+- Added item-name tracking keywords (`contributing_item_names`, `noncontributing_item_names`) plus JSON item lists.
+- Added `receipt_amount_if_different` keyword semantics.
+- Added operation placeholders like `<total_expenses>`, `<total_receipt_expenses>`, and `<receipt_count>` for summary rows.
+
+Important note:
+- The README now defines the contract, but the new operation placeholders and expanded structured outputs will be implemented in the next code phase.
+
+---
+
+# User
+Ok, let's continue on implementing the bigger changes now. Keep in mind the approach of not hardcoding the output -- the user can define the model based on our contract, and the app will fill in via keywords and operations. And the values associated with these keywords will come from a data extraction module, with additional keywords from a data processing module.
+
+---
+
+# Codex
+Implemented. The deterministic architecture is now split into extraction -> processing -> model-template rendering, with JSON sidecar output.
+
+**What I changed**
+- Added structured extraction module with line-item parsing, keyword evidence capture, and highlight-aware contribution logic:
+  - `structured_extractor.py`
+- Extended OCR layer to return richer document artifacts (raw text + OCR lines + highlight signal availability):
+  - `ocr_router.py`
+- Added deterministic processing module for computed fields and run-level totals:
+  - `expense_processor.py`
+- Added model-driven renderer for:
+  - `{{keyword}}` per-receipt placeholders
+  - `<operation>` run-level placeholders (like `<total_expenses>`)
+  - `template_renderer.py`
+- Updated pipeline orchestration to:
+  - build extracted + processed keyword contexts
+  - render model rows via contract instead of hardcoded output assumptions
+  - export one detailed sidecar JSON: `*_detailed.json`
+  - `pipeline.py`
+- Added model row loading helper:
+  - `template_loader.py`
+- Disabled hardcoded total-row insertion in pipeline exports (template controls summary now):
+  - `exporter.py`
+- Tightened filename inference to reduce false contradictions from alphanumeric tokens like `r1`:
+  - `filename_inference.py`
+
+**Tests added**
+- `test_structured_extraction_and_processing.py`
+- `test_template_renderer.py`
+- `test_detailed_json_output.py`
+
+**Docs updated**
+- `models/README.md` (keyword/operation contract expanded)
+- `README.md`
+- `docs/ARCHITECTURE.md`
+- `docs/OPERATIONS.md`
+- `docs/CHANGELOG.md`
+- plus subfolder READMEs for new/expanded modules.
+
+**Validation**
+- Ran: `PYTHONPATH=src .venv/bin/python -m pytest -q`
+- Result: `36 passed`
+
+**Notes**
+- I updated `docs/CODEX_LOG.md` at response start per your one-response-lag rule.
+- There are new untracked files (new modules/tests). Per your git governance, you’ll handle staging untracked paths when ready.
+
+---
+
+# User
+Do these implementation have failure/fallback handling? If so, what are they?
+
+---
+
+# Codex
+Yes. There are multiple fallback/failure paths now:
+
+1. OCR/extraction input fallback  
+- Missing OCR/PDF libs or OCR read failure returns empty-safe outputs instead of crashing (`ocr_router.py:31`, `ocr_router.py:81`, `ocr_router.py:157`).  
+- Unsupported file types return empty `DocumentExtraction` (`ocr_router.py:182`).  
+- Highlight detection is explicitly marked unavailable when not possible (notably PDFs) (`ocr_router.py:185`).
+
+2. Structured extraction fallback  
+- If no highlights are detected, all detected items default to contributing (`structured_extractor.py:175`).  
+- If `amount_paid` keyword is missing, it falls back to parsed amount (`structured_extractor.py:187`).  
+- Confidence/review fallback: low-information receipts get `needs_review=True` (`structured_extractor.py:196`).
+
+3. Processing fallback math  
+- Missing totals are derived when possible (`pre_tip_total`, `amount_paid`) (`expense_processor.py:45`, `expense_processor.py:48`).  
+- `true_expense` fallback chain: subtotal math -> contributing total -> amount paid -> `0.0` (`expense_processor.py:53`).  
+- `receipt_amount_if_different` is empty unless amounts differ (`expense_processor.py:65`).
+
+4. Template rendering fallback  
+- If model has no keyword template rows (or no rows), it falls back to alias-based column mapping (`template_renderer.py:140`, `template_renderer.py:145`).  
+- Unknown `{{keywords}}` / `<operations>` are blanked and collected for reporting (`template_renderer.py:88`, `template_renderer.py:95`).
+
+5. Pipeline fault isolation and review routing  
+- Per-receipt failures are isolated; one bad file is flagged and pipeline continues (`pipeline.py:352`).  
+- Null/contradiction/validation/low-confidence each route to exception records rather than hard-fail run (`pipeline.py:144`, `pipeline.py:178`, `pipeline.py:249`, `pipeline.py:276`).  
+- Unknown template tokens are logged and also included in detailed JSON summary (`pipeline.py:389`, `pipeline.py:411`).
+
+So overall: yes, it’s designed to degrade gracefully, route uncertain cases to review, and preserve run continuity.
+
+---
+
+# User
+Great, and can you review the project for what is hardcoded, or assumed programmatically?
+
+---
+
+# Codex
+Implemented issues 1 to 3.
+
+What changed:
+
+1. Removed hardcoded legacy validation gate before rendering  
+- Pipeline no longer blocks receipts based on hardcoded date/description/amount required-column checks before template rendering.  
+- Confidence/risk gating is now based on model-template-rendered row coverage (contract-first), not legacy semantic-column assumptions.  
+- Updated: `pipeline.py`
+
+2. Expanded fallback mapping beyond narrow alias assumptions  
+- Added a public fallback mapper that uses normalized keyword matching from available keyword values, with aliases as optional overrides.  
+- Updated: `template_renderer.py`
+
+3. Fixed zero-receipt operation rendering behavior  
+- Operation-only templates now render even when no receipts are accepted.  
+- Templates that include receipt keyword rows do not emit stray literal/summary rows when zero receipts are accepted.  
+- Updated: `template_renderer.py`
+
+Also added/updated regression tests for these behaviors:
+- `test_template_renderer.py`
+- `test_model_contract_pipeline.py`
+
+Validation:
+- `PYTHONPATH=src .venv/bin/python -m pytest -q`
+- Result: `38 passed`
+
+---
+
+# User
+Ok, it runs, but now I'm not getting working results. It's failing to extract on simple receipts.
+
+I have included now actual receipts in `data/inbox/`. This app should not be failing to extract data from these.
+I will want you to use these real receipts in order to debug without making the the app hardcoded to these specific receipts.
+
+But before doing so, I want you to analyze the receipts yourself and let me know what you see.

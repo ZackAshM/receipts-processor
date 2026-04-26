@@ -17,6 +17,9 @@ I am building a receipt-to-expense pipeline that:
 - Rule-based extraction for date, vendor, and total amount.
 - Filename-based fallback inference for date/amount/vendor.
 - Optional notes context via `notes.txt` or receipt-specific `*_notes.txt`.
+- Deterministic structured extraction layer (document metadata, totals, itemization, keyword evidence).
+- Deterministic processing layer (for derived fields like `true_expense`, `receipt_expense`, and `receipt_amount_if_different`).
+- Model-driven template rendering via placeholders (`{{keyword}}`) and run-level operations (`<operation>`).
 - Model/example-driven output shaping (for date/currency style and column mapping).
 - Automatic summary row generation (`Total:`) aligned to template columns.
 - Spreadsheet formula-injection sanitization for exported cell values.
@@ -124,6 +127,7 @@ If `_tkinter` import fails, install Tk support for your Python:
 
 - Main export: `Expenses.csv` (or `.xlsx` if you choose that extension)
 - Flagged records: `Expenses_exceptions.csv`
+- Detailed extraction + processing sidecar: `Expenses_detailed.json`
 - Runtime performance/debug logs: `logs/performance-YYYY-MM-DD.jsonl`
 
 ## Product Management Evidence

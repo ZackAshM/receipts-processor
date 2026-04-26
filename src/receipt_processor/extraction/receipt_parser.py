@@ -9,8 +9,8 @@ AMOUNT_RE = re.compile(r"(?:USD|\$)?\s*(\d{1,3}(?:,\d{3})*(?:\.\d{2})|\d+\.\d{2}
 
 DATE_PATTERNS = [
     (re.compile(r"\b(\d{4})[-/](\d{2})[-/](\d{2})\b"), "%Y-%m-%d"),
-    (re.compile(r"\b(\d{2})[-/](\d{2})[-/](\d{4})\b"), "%m-%d-%Y"),
-    (re.compile(r"\b(\d{2})[-/](\d{2})[-/](\d{2})\b"), "%m-%d-%y"),
+    (re.compile(r"\b(\d{1,2})[-/](\d{1,2})[-/](\d{4})\b"), "%m-%d-%Y"),
+    (re.compile(r"\b(\d{1,2})[-/](\d{1,2})[-/](\d{2})\b"), "%m-%d-%y"),
     (
         re.compile(
             r"\b("
@@ -44,6 +44,20 @@ IGNORE_VENDOR_TOKENS = {
     "tax",
     "total",
     "amount",
+    "guest number",
+    "cashier",
+    "check",
+    "server",
+    "ordered",
+    "transaction",
+    "authorization",
+    "approval",
+    "terminal",
+    "payment",
+    "input type",
+    "cardholder",
+    "powered by",
+    "auth",
 }
 
 
@@ -97,9 +111,14 @@ def _extract_date(raw_text: str) -> str:
             day = f"{int(match.group(2)):02d}"
             year = match.group(3)
             parsed = _safe_parse_datetime(f"{month} {day} {year}", fmt)
-        elif fmt in {"%Y-%m-%d", "%m-%d-%Y", "%m-%d-%y"}:
+        elif fmt == "%Y-%m-%d":
             parts = [group for group in match.groups()]
             parsed = _safe_parse_datetime("-".join(parts), fmt)
+        elif fmt in {"%m-%d-%Y", "%m-%d-%y"}:
+            month = f"{int(match.group(1)):02d}"
+            day = f"{int(match.group(2)):02d}"
+            year = match.group(3)
+            parsed = _safe_parse_datetime(f"{month}-{day}-{year}", fmt)
         else:
             parsed = None
 
@@ -126,7 +145,23 @@ def _infer_expense_type(vendor: str, raw_text: str) -> str:
     haystack = f"{vendor} {raw_text}".lower()
     if any(key in haystack for key in ("uber", "lyft", "taxi", "flight", "airline", "train", "hotel")):
         return "Transportation"
-    if any(key in haystack for key in ("coffee", "restaurant", "cafe", "grill", "pizza", "food", "bar", "taqueria", "chilis")):
+    if any(
+        key in haystack
+        for key in (
+            "coffee",
+            "restaurant",
+            "cafe",
+            "grill",
+            "pizza",
+            "food",
+            "bar",
+            "taqueria",
+            "chilis",
+            "burger",
+            "bakery",
+            "sandwich",
+        )
+    ):
         return "Food"
     if any(key in haystack for key in ("office", "staples", "supplies", "stationery")):
         return "Office Supplies"

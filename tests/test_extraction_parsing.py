@@ -27,3 +27,21 @@ def test_filename_inference_extracts_date_amount_vendor() -> None:
     assert inferred["date"] == "2025-06-24"
     assert inferred["amount"] == "19.23"
     assert inferred["vendor"] == "taqueria san luis"
+
+
+def test_filename_inference_supports_compact_yyyymmdd_date() -> None:
+    inferred = infer_fields_from_filename(
+        "20250818-Food-GreatBasinBakery.pdf",
+        current_fields={},
+    )
+    assert inferred["date"] == "2025-08-18"
+
+
+def test_parse_receipt_text_supports_single_digit_month_day_dates() -> None:
+    text = """
+    GREAT BASIN BAKERY
+    Ordered: 8/18/25 9:24 AM
+    Total $22.12
+    """
+    parsed = parse_receipt_text(text)
+    assert parsed["date"] == "2025-08-18"

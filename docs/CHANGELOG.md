@@ -30,6 +30,9 @@
 - Added optional log privacy mode to mask file identifiers in telemetry.
 - Updated runtime logging layout to write directly under `logs/` and removed `user_id` from emitted telemetry events.
 - Added GitHub Actions workflows for automated CI tests and dependency vulnerability scanning.
+- Added deterministic structured extraction and processing modules, including highlight-aware contribution logic for OCR image lines.
+- Added model-template rendering support for `{{keyword}}` placeholders and `<operation>` summary tokens.
+- Added run-level detailed sidecar export (`*_detailed.json`) containing per-receipt extracted + processed data and summary totals.
 - Updated CLI UX to support direct positional invocation (`receipts_processor <input_dir>`) with optional flags.
 - Changed CLI default output location to `<input_dir>/Expenses.csv` when `--output-file` is omitted.
 - Added `--output-type` (`csv` default, optional `xlsx`) for output format selection.
