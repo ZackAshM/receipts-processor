@@ -11,6 +11,53 @@ from receipt_processor.io.template_loader import TemplateHints
 KEYWORD_TOKEN_RE = re.compile(r"\{\{\s*([a-zA-Z0-9_]+)\s*\}\}")
 OPERATION_TOKEN_RE = re.compile(r"<\s*([a-zA-Z0-9_]+)\s*>")
 
+SUPPORTED_TEMPLATE_KEYWORDS = {
+    "filename",
+    "document_type",
+    "merchant_name",
+    "transaction_date",
+    "transaction_type",
+    "currency",
+    "line_items",
+    "contributing_items",
+    "noncontributing_items",
+    "contributing_items_total",
+    "noncontributing_items_total",
+    "contributing_items_count",
+    "noncontributing_items_count",
+    "subtotal",
+    "tax",
+    "tip",
+    "service_charge",
+    "pre_tip_total",
+    "amount_paid",
+    "used_keywords",
+    "confidence",
+    "needs_review",
+    "highlight_detection_available",
+    "has_highlighted_contributions",
+    "raw_text_length",
+    "true_expense",
+    "receipt_expense",
+    "receipt_amount_if_different",
+    "description",
+    "contributing_item_names",
+    "noncontributing_item_names",
+    "contributing_items_json",
+    "noncontributing_items_json",
+    "used_keywords_json",
+    "notes_files",
+}
+
+SUPPORTED_TEMPLATE_OPERATIONS = {
+    "total_expenses",
+    "total_receipt_expenses",
+    "total_contributing_items",
+    "total_noncontributing_items",
+    "receipt_count",
+    "review_count",
+}
+
 MONEY_FIELDS = {
     "subtotal",
     "tax",
@@ -150,6 +197,20 @@ def _row_has_operation_tokens(row: dict[str, str]) -> bool:
 def has_keyword_placeholders(model_rows: list[dict[str, str]]) -> bool:
     """Return True when any model row contains at least one {{keyword}} token."""
     return any(_row_has_keyword_tokens(row) for row in model_rows)
+
+
+def collect_template_tokens(model_rows: list[dict[str, str]]) -> tuple[set[str], set[str]]:
+    """Return all keyword and operation tokens referenced in a model template."""
+    keywords: set[str] = set()
+    operations: set[str] = set()
+    for row in model_rows:
+        for value in row.values():
+            text = str(value or "")
+            for match in KEYWORD_TOKEN_RE.finditer(text):
+                keywords.add(match.group(1))
+            for match in OPERATION_TOKEN_RE.finditer(text):
+                operations.add(match.group(1))
+    return keywords, operations
 
 
 def render_rows_from_model_template(

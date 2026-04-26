@@ -17,7 +17,7 @@ Rules:
 - Cells containing `{{...}}` are treated as dynamic keyword placeholders.
 - Text outside placeholders is treated as literal text.
 - You can combine literal text + placeholders in one cell.
-- Unknown placeholders are expected to be flagged for review by the pipeline.
+- Unknown placeholders/operations cause a hard failure before export (no silent blank substitution).
 - Alias-based column inference is not supported. Models must explicitly use placeholders.
 
 Examples:

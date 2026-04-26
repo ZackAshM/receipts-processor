@@ -1,0 +1,22 @@
+# Pinned dependency lockfile for reproducible CI/runtime installs.
+# Update by syncing environment and refreshing pins intentionally.
+annotated-doc==0.0.4
+click==8.3.3
+et_xmlfile==2.0.0
+iniconfig==2.3.0
+markdown-it-py==4.0.0
+mdurl==0.1.2
+openpyxl==3.1.5
+packaging==26.2
+pillow==12.2.0
+pluggy==1.6.0
+Pygments==2.20.0
+pypdf==6.10.2
+pytesseract==0.3.13
+pytest==9.0.3
+PyYAML==6.0.3
+rich==15.0.0
+setuptools==82.0.1
+shellingham==1.5.4
+typer==0.24.2
+wheel==0.47.0

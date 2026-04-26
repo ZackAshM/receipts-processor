@@ -5,6 +5,6 @@ Purpose:
 - `risk_controls.yaml` is loaded at runtime by the pipeline for confidence-based routing.
 
 Contents:
-- `app.yaml`: default app and pipeline paths.
-- `extraction_rules.yaml`: extraction and filename inference settings.
-- `risk_controls.yaml`: operational controls and confidence thresholds.
+- `risk_controls.yaml`: active runtime controls and confidence thresholds.
+- `app.yaml`: reserved/reference configuration (currently not loaded at runtime).
+- `extraction_rules.yaml`: reserved/reference configuration (currently not loaded at runtime).

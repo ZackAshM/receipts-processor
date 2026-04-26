@@ -101,3 +101,21 @@
 - Requested by: User
 - Implemented by: Codex
 - Rationale: Add a GUI in addition to CLI so users can select receipt folders via OS picker and access less common options from an Advanced panel.
+
+## D-0018: Strict Template Token Enforcement
+- Status: Accepted
+- Requested by: User
+- Implemented by: Codex
+- Rationale: Unknown `{{keyword}}` or `<operation>` template tokens must fail the run instead of silently exporting blank values.
+
+## D-0019: Configuration Surface Clarity
+- Status: Accepted
+- Requested by: User
+- Implemented by: Codex
+- Rationale: Only runtime-wired configs should be documented as active; non-wired config files must be clearly marked as reserved/reference.
+
+## D-0020: Redaction Policy Enforcement in CODEX_LOG
+- Status: Accepted
+- Requested by: User
+- Implemented by: Codex
+- Rationale: Chat logs must not contain sensitive absolute paths, and CI should fail when unredacted absolute paths are detected.

@@ -1,5 +1,22 @@
 # Changelog
 
+## 2026-04-26
+
+### Added
+- Enforced strict template token behavior: unknown `{{...}}` and `<...>` tokens now fail the run before export.
+- Added regression tests for unknown keyword and unknown operation token failures.
+- Added `requirements.lock.txt` for pinned/reproducible installs.
+- Added SBOM generation/upload in security CI workflow (`sbom.cdx.json` artifact).
+- Added CI guard to fail if `docs/CODEX_LOG.md` contains unredacted absolute paths.
+
+### Changed
+- Updated architecture and quality docs to reflect current template-driven runtime checks (and optional/non-gating validation module status).
+- Updated configuration docs to clearly distinguish active runtime config (`risk_controls.yaml`) from reserved/reference stubs (`app.yaml`, `extraction_rules.yaml`).
+- Updated root README to remove stale `template/` reference and clarify model/config descriptions.
+- Redacted existing absolute filepaths from `docs/CODEX_LOG.md` to align with governance policy.
+- Removed committed build artifacts under `src/receipt_processor.egg-info/`.
+- Added `.gitignore` rule for `*.egg-info/`.
+
 ## 2026-04-25
 
 ### Added

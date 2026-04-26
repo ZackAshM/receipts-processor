@@ -41,7 +41,7 @@ def test_pipeline_enforces_low_confidence_threshold_from_config(tmp_path: Path) 
     model = tmp_path / "model.csv"
     model.write_text(
         "Date,Description,Amt Claimed (USD),Project\n"
-        "{{transaction_date}},{{description}},{{true_expense}},{{policy_code}}\n",
+        "{{transaction_date}},{{description}},{{true_expense}},{{receipt_amount_if_different}}\n",
         encoding="utf-8",
     )
     example = tmp_path / "example.csv"

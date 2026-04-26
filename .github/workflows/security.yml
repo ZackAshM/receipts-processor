@@ -26,5 +26,19 @@ jobs:
           python -m pip install --upgrade pip
           pip install pip-audit
 
+      - name: Generate SBOM (CycloneDX JSON)
+        run: |
+          pip-audit -r requirements.lock.txt -f cyclonedx-json -o sbom.cdx.json --progress-spinner off || true
+          if [ ! -s sbom.cdx.json ]; then
+            echo '{}' > sbom.cdx.json
+          fi
+
+      - name: Upload SBOM artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dependency-sbom
+          path: sbom.cdx.json
+
       - name: Audit dependencies
-        run: pip-audit -r requirements.txt --progress-spinner off
+        run: pip-audit -r requirements.lock.txt --progress-spinner off

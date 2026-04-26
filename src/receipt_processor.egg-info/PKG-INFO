@@ -33,7 +33,7 @@ I am building a receipt-to-expense pipeline that:
 - Deterministic structured extraction layer (document metadata, totals, itemization, keyword evidence).
 - Deterministic processing layer (for derived fields like `true_expense`, `receipt_expense`, and `receipt_amount_if_different`).
 - Model-driven template rendering via placeholders (`{{keyword}}`) and run-level operations (`<operation>`).
-- Model/example-driven output shaping (for date/currency style and column mapping).
+- Model/example-driven output shaping (for date/currency formatting hints).
 - Automatic summary row generation (`Total:`) aligned to template columns.
 - Spreadsheet formula-injection sanitization for exported cell values.
 - Null-result and contradiction flagging with sidecar exception export (`*_exceptions.csv`).
@@ -52,8 +52,8 @@ I directed these core requirements:
 ## Current Repository Layout
 
 - `src/receipt_processor/`: product code and pipeline modules.
-- `configs/`: app configuration, extraction rules, and risk controls.
-- `models/`: model and example templates copied from `template/`.
+- `configs/`: runtime risk controls plus reserved/reference config stubs.
+- `models/`: model and example templates defining the output contract.
 - `data/`: input, processed, and output file locations.
 - `agent/`: Codex governance (charter, guardrails, risk, failures, approval policy).
 - `docs/`: product management artifacts and change/log records.
@@ -64,7 +64,7 @@ I directed these core requirements:
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
-pip install -r requirements.txt
+pip install -r requirements.lock.txt
 pip install -e .
 receipts_processor data/inbox \
   --model-file models/model.csv \

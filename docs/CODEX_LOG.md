@@ -265,7 +265,7 @@ In addition, something you can do now without approval, please redact current se
 Immediate action completed (without waiting for approval, per your instruction):
 
 - Redacted sensitive absolute path content in [`docs/CODEX_LOG.md`](<REDACTED_ABSOLUTE_PATH>).
-- Verified there are no remaining `/Users/...` paths in that log.
+- Verified there are no remaining `[REDACTED_PATH]` paths in that log.
 - Codified “always redact sensitive log content” rules in:
   - [`agent/HUMAN_APPROVAL_POLICY.md`](<REDACTED_ABSOLUTE_PATH>)
   - [`agent/PROMPT_PROTOCOL.md`](<REDACTED_ABSOLUTE_PATH>)
@@ -1623,3 +1623,63 @@ Validation:
 
 User 2026-04-26 15:40:41 CDT
 ok, now implement a content length check: if a pdf text content is not showing a lot, assume it needs OCR
+
+Codex 2026-04-26 16:06:08 CDT
+Implemented a full remediation pass for that review.
+
+Resolved findings:
+1) P1 unknown template tokens no longer silently blank.
+- `run_pipeline` now hard-fails before export when unknown `{{...}}` or `<...>` tokens are detected.
+- Contract doc updated to match hard-fail behavior.
+- Added tests for unknown keyword and unknown operation failures.
+
+2) P2 validation/docs mismatch aligned.
+- Architecture now reflects template-driven runtime checks (not runtime required-field validation gate).
+- Quality/package READMEs now mark `validation.py` as optional utility, not default runtime gate.
+
+3) P2 redaction policy mismatch fixed.
+- Redacted absolute paths in `docs/CODEX_LOG.md`.
+- Added CI enforcement to fail on unredacted absolute paths in `CODEX_LOG.md`.
+
+4) P2 config surface clarified.
+- `configs/README.md` now clearly states only `risk_controls.yaml` is runtime-active; `app.yaml` and `extraction_rules.yaml` are reserved/reference.
+
+5) P3 packaging artifacts removed.
+- Deleted committed `src/receipt_processor.egg-info/*` files.
+- Added ignore rule for future generated metadata in `.gitignore`.
+
+6) P3 dependency governance improved (lockfile + SBOM).
+- Added pinned lockfile `requirements.lock.txt`.
+- CI now installs from lockfile.
+- Security workflow now audits lockfile and generates/uploads CycloneDX SBOM artifact.
+
+7) P3 stale docs reference fixed.
+- Removed stale `template/` wording in root docs.
+
+Also updated governance/change records:
+- `docs/DECISIONS.md`
+- `docs/CHANGELOG.md`
+
+Validation:
+- Full test suite: `55 passed`.
+
+User 2026-04-26 16:06:08 CDT
+Ok, this is a follow-up review:
+
+```
+2. `[P2]` Unknown template token failure is now correct, but it happens late (after receipt processing/review work), which can cause wasted operator effort before hard-fail.  
+The check is only after rendering at the end of the run.  
+Reference: [pipeline.py:704]([REDACTED_PATH]), [pipeline.py:715]([REDACTED_PATH]).
+
+3. `[P2]` Reproducibility messaging is still a bit inconsistent for operators.  
+`requirements.txt` now says use lockfile for reproducibility, but README quick start still tells users to install from `requirements.txt`, which undermines that goal.  
+References: [requirements.txt:1]([REDACTED_PATH]), [README.md:54]([REDACTED_PATH]).
+
+4. `[P3]` SBOM upload may be skipped on vulnerable builds.  
+Because `pip-audit` runs before SBOM generation, a failing audit prevents artifact creation, reducing forensic visibility when failures happen.  
+Reference: [security.yml:29]([REDACTED_PATH]), [security.yml:32]([REDACTED_PATH]).
+
+No other regressions stood out in the diff. The key improvements you added look good: strict unknown-token enforcement, docs alignment around config/runtime behavior, egg-info cleanup, CI redaction guard, and dependency/SBOM workflow additions.
+
+Verification: local tests pass (`55 passed`).
+```

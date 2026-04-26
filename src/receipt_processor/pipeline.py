@@ -18,6 +18,9 @@ from receipt_processor.io.exporter import export_expenses
 from receipt_processor.io.file_discovery import discover_receipt_files
 from receipt_processor.io.template_loader import infer_template_hints, load_model_columns, load_model_rows
 from receipt_processor.io.template_renderer import (
+    SUPPORTED_TEMPLATE_KEYWORDS,
+    SUPPORTED_TEMPLATE_OPERATIONS,
+    collect_template_tokens,
     has_keyword_placeholders,
     infer_required_review_fields,
     render_rows_from_model_template,
@@ -257,6 +260,15 @@ def run_pipeline(
     exception_rows: list[dict] = []
     receipt_files = discover_receipt_files(input_dir)
     model_template_rows = load_model_rows(model_file)
+    template_keywords, template_operations = collect_template_tokens(model_template_rows)
+    preflight_unknown_keywords = sorted(template_keywords - SUPPORTED_TEMPLATE_KEYWORDS)
+    preflight_unknown_operations = sorted(template_operations - SUPPORTED_TEMPLATE_OPERATIONS)
+    if preflight_unknown_keywords or preflight_unknown_operations:
+        raise ValueError(
+            "Unknown template tokens detected before processing; refusing to run. "
+            f"unknown_keywords={preflight_unknown_keywords} "
+            f"unknown_operations={preflight_unknown_operations}"
+        )
     required_review_fields = infer_required_review_fields(
         model_columns=model_columns,
         model_rows=model_template_rows,
@@ -710,12 +722,18 @@ def run_pipeline(
         template_hints=template_hints,
     )
     if unknown_keywords or unknown_operations:
+        details = {
+            "unknown_keywords": sorted(unknown_keywords),
+            "unknown_operations": sorted(unknown_operations),
+        }
         logger.emit(
             "template_tokens_unknown",
-            {
-                "unknown_keywords": sorted(unknown_keywords),
-                "unknown_operations": sorted(unknown_operations),
-            },
+            details,
+        )
+        raise ValueError(
+            "Unknown template tokens detected; refusing to export with blank substitutions. "
+            f"unknown_keywords={details['unknown_keywords']} "
+            f"unknown_operations={details['unknown_operations']}"
         )
     export_expenses(
         rendered_rows,
