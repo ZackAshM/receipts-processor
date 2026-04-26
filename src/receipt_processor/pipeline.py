@@ -7,6 +7,7 @@ import os
 from datetime import UTC, datetime
 from pathlib import Path
 from time import perf_counter
+from typing import Callable
 
 from receipt_processor.config.risk_controls import load_risk_controls
 from receipt_processor.extraction.filename_inference import infer_fields_from_filename
@@ -16,14 +17,25 @@ from receipt_processor.extraction.structured_extractor import extract_structured
 from receipt_processor.io.exporter import export_expenses
 from receipt_processor.io.file_discovery import discover_receipt_files
 from receipt_processor.io.template_loader import infer_template_hints, load_model_columns, load_model_rows
-from receipt_processor.io.template_renderer import map_columns_from_keywords, render_rows_from_model_template
+from receipt_processor.io.template_renderer import (
+    has_keyword_placeholders,
+    infer_required_review_fields,
+    render_rows_from_model_template,
+)
 from receipt_processor.observability.runtime_logger import RuntimeLogger
 from receipt_processor.processing.expense_processor import process_structured_data, summarize_processed_rows
 from receipt_processor.quality.confidence import calculate_confidence
-from receipt_processor.quality.consistency import detect_contradictions, is_null_result
+from receipt_processor.quality.consistency import detect_contradictions
 from receipt_processor.quality.exception_queue import (
     build_exception_record,
     export_exception_records,
+)
+from receipt_processor.review.models import (
+    ReviewField,
+    ReviewHandler,
+    ReviewOption,
+    ReviewRequest,
+    RunCancelledError,
 )
 
 
@@ -60,6 +72,161 @@ def _write_detailed_json(path: Path, payload: dict) -> None:
         json.dump(payload, handle, ensure_ascii=True, indent=2, default=str)
 
 
+REVIEW_FIELD_ORDER = ("vendor", "date", "amount", "expense_type")
+REVIEW_FIELD_LABELS = {
+    "vendor": "Vendor",
+    "date": "Date",
+    "amount": "Amount",
+    "expense_type": "Transaction Type",
+}
+WarningHandler = Callable[[dict[str, object]], None]
+
+
+def _ordered_required_fields(required_fields: set[str]) -> list[str]:
+    return [field for field in REVIEW_FIELD_ORDER if field in required_fields]
+
+
+def _is_null_result_for_required_fields(
+    fields: dict[str, str],
+    required_fields: set[str],
+) -> bool:
+    ordered = _ordered_required_fields(required_fields)
+    if not ordered:
+        return False
+    return all(not str(fields.get(field, "")).strip() for field in ordered)
+
+
+def _build_conflict_review_fields(
+    source_fields: dict[str, dict[str, str]],
+    required_fields: set[str],
+) -> list[ReviewField]:
+    fields: list[ReviewField] = []
+    for key in _ordered_required_fields(required_fields):
+        options: list[ReviewOption] = []
+        seen: set[str] = set()
+        for source_name, values in source_fields.items():
+            value = str(values.get(key, "")).strip()
+            if not value or value in seen:
+                continue
+            seen.add(value)
+            options.append(ReviewOption(source=source_name, value=value))
+        if len(options) > 1:
+            fields.append(
+                ReviewField(
+                    name=key,
+                    display_name=REVIEW_FIELD_LABELS.get(key, key),
+                    options=options,
+                )
+            )
+    return fields
+
+
+def _build_manual_review_fields(required_fields: set[str]) -> list[ReviewField]:
+    return [
+        ReviewField(
+            name=field,
+            display_name=REVIEW_FIELD_LABELS.get(field, field),
+            options=[],
+        )
+        for field in _ordered_required_fields(required_fields)
+    ]
+
+
+def _build_editable_review_fields(
+    source_fields: dict[str, dict[str, str]],
+    required_fields: set[str],
+) -> list[ReviewField]:
+    fields: list[ReviewField] = []
+    for key in _ordered_required_fields(required_fields):
+        options: list[ReviewOption] = []
+        seen: set[str] = set()
+        for source_name, values in source_fields.items():
+            value = str(values.get(key, "")).strip()
+            if not value or value in seen:
+                continue
+            seen.add(value)
+            options.append(ReviewOption(source=source_name, value=value))
+        fields.append(
+            ReviewField(
+                name=key,
+                display_name=REVIEW_FIELD_LABELS.get(key, key),
+                options=options,
+            )
+        )
+    return fields
+
+
+def _filter_resolved_contradictions(
+    contradictions: list[str],
+    resolved_fields: dict[str, str],
+) -> list[str]:
+    resolved_keys = {
+        key.strip().lower()
+        for key, value in resolved_fields.items()
+        if str(value).strip()
+    }
+    if not resolved_keys:
+        return contradictions
+
+    filtered: list[str] = []
+    for item in contradictions:
+        normalized = item.strip().lower()
+        if any(normalized.startswith(f"{key} mismatch") for key in resolved_keys):
+            continue
+        filtered.append(item)
+    return filtered
+
+
+def _contradiction_field(contradiction: str) -> str:
+    lowered = contradiction.strip().lower()
+    marker = " mismatch"
+    idx = lowered.find(marker)
+    if idx <= 0:
+        return ""
+    return lowered[:idx].strip()
+
+
+def _partition_contradictions(
+    contradictions: list[str],
+    required_fields: set[str],
+) -> tuple[list[str], list[str]]:
+    if not contradictions:
+        return [], []
+
+    blocking: list[str] = []
+    non_blocking: list[str] = []
+    for contradiction in contradictions:
+        field = _contradiction_field(contradiction)
+        if field and field in required_fields:
+            blocking.append(contradiction)
+        else:
+            non_blocking.append(contradiction)
+    return blocking, non_blocking
+
+
+def _apply_resolved_fields(
+    resolved_fields: dict[str, str],
+    parsed: dict[str, str],
+    extracted: dict[str, object],
+) -> None:
+    for key, raw_value in resolved_fields.items():
+        value = str(raw_value).strip()
+        if not value:
+            continue
+        parsed[key] = value
+        if key == "vendor":
+            extracted["merchant_name"] = value
+        elif key == "date":
+            extracted["transaction_date"] = value
+        elif key == "amount":
+            try:
+                extracted["amount_paid"] = float(value.replace("$", "").replace(",", ""))
+            except ValueError:
+                pass
+        elif key == "expense_type":
+            extracted["transaction_type"] = value
+
+
 def run_pipeline(
     input_dir: Path,
     model_file: Path,
@@ -67,6 +234,8 @@ def run_pipeline(
     output_file: Path,
     log_dir: Path | None = None,
     risk_controls_file: Path | None = None,
+    review_handler: ReviewHandler | None = None,
+    warning_handler: WarningHandler | None = None,
 ) -> None:
     """Extract receipt data and export records in model format."""
     run_started = perf_counter()
@@ -88,6 +257,16 @@ def run_pipeline(
     exception_rows: list[dict] = []
     receipt_files = discover_receipt_files(input_dir)
     model_template_rows = load_model_rows(model_file)
+    required_review_fields = infer_required_review_fields(
+        model_columns=model_columns,
+        model_rows=model_template_rows,
+    )
+    sorted_required_review_fields = sorted(required_review_fields)
+    if receipt_files and not has_keyword_placeholders(model_template_rows):
+        raise ValueError(
+            "Model template must include at least one {{keyword}} placeholder row. "
+            "Alias-based column mapping is no longer supported."
+        )
 
     logger.emit(
         "run_started",
@@ -102,6 +281,7 @@ def run_pipeline(
             "minimum_auto_accept_confidence": risk_controls.minimum_auto_accept_confidence,
             "require_manual_review_below": risk_controls.require_manual_review_below,
             "route_low_confidence_to_review": risk_controls.route_low_confidence_to_review,
+            "required_review_fields": sorted_required_review_fields,
         },
     )
 
@@ -123,12 +303,15 @@ def run_pipeline(
             filename_observed_fields = infer_fields_from_filename(receipt_path.name, {})
             parsed_from_filename = infer_fields_from_filename(receipt_path.name, parsed_from_text)
 
-            contradictions = detect_contradictions(
-                {
-                    "file": parsed_from_text,
-                    "filename": filename_observed_fields,
-                    "notes": parsed_from_notes,
-                }
+            source_fields = {
+                "file": parsed_from_text,
+                "filename": filename_observed_fields,
+                "notes": parsed_from_notes,
+            }
+            contradictions = detect_contradictions(source_fields)
+            blocking_contradictions, non_blocking_contradictions = _partition_contradictions(
+                contradictions,
+                required_review_fields,
             )
 
             parsed = _merge_fields_by_priority(
@@ -138,73 +321,174 @@ def run_pipeline(
             )
             if matched_note_files:
                 parsed["notes_files"] = ", ".join(matched_note_files)
+            review_actions: list[dict[str, object]] = []
 
-            if is_null_result(parsed):
-                exception_rows.append(
-                    build_exception_record(
-                        receipt_path=receipt_path,
-                        record={
-                            "issue_type": "no_relevant_information",
-                            "details": (
-                                "No relevant fields extracted from file text, filename,"
-                                " or notes context."
+            if _is_null_result_for_required_fields(parsed, required_review_fields):
+                manual_fields = _build_manual_review_fields(required_review_fields)
+                if review_handler is not None and manual_fields:
+                    decision = review_handler(
+                        ReviewRequest(
+                            issue_type="no_relevant_information",
+                            title="No Relevant Information Found",
+                            message=(
+                                "No reliable fields were extracted. Enter manual values, "
+                                "skip this receipt, or cancel the run."
                             ),
-                        },
-                        errors=["No relevant information found"],
+                            receipt_filename=receipt_path.name,
+                            fields=manual_fields,
+                        )
                     )
-                )
-                logger.emit(
-                    "receipt_flagged",
-                    {
-                        "source_file": receipt_path.name,
-                        "status": "no_relevant_information",
-                        "duration_ms": round((perf_counter() - receipt_started) * 1000, 2),
-                        "matched_notes_files": matched_note_files,
-                    },
-                )
-                detailed_receipts.append(
-                    {
-                        "filename": receipt_path.name,
-                        "status": "flagged",
-                        "issue_type": "no_relevant_information",
-                        "matched_notes_files": matched_note_files,
-                        "extracted": extracted,
-                    }
-                )
-                continue
+                    if decision.action == "cancel_run":
+                        raise RunCancelledError("Run cancelled by user review action.")
+                    review_actions.append(
+                        {
+                            "issue_type": "no_relevant_information",
+                            "action": decision.action,
+                            "resolved_fields": dict(decision.resolved_fields),
+                        }
+                    )
+                    if decision.action == "resolved":
+                        _apply_resolved_fields(decision.resolved_fields, parsed, extracted)
 
-            if contradictions:
-                exception_rows.append(
-                    build_exception_record(
-                        receipt_path=receipt_path,
-                        record={
-                            "issue_type": "contradiction_detected",
-                            "details": " | ".join(contradictions),
-                        },
-                        errors=["Contradicting information across sources"],
+                if _is_null_result_for_required_fields(parsed, required_review_fields):
+                    exception_rows.append(
+                        build_exception_record(
+                            receipt_path=receipt_path,
+                            record={
+                                "issue_type": "no_relevant_information",
+                                "details": (
+                                    "No model-required fields extracted from file text, "
+                                    "filename, or notes context."
+                                ),
+                            },
+                            errors=["No relevant information found"],
+                        )
                     )
+                    logger.emit(
+                        "receipt_flagged",
+                        {
+                            "source_file": receipt_path.name,
+                            "status": "no_relevant_information",
+                            "duration_ms": round((perf_counter() - receipt_started) * 1000, 2),
+                            "matched_notes_files": matched_note_files,
+                        },
+                    )
+                    detailed_receipts.append(
+                        {
+                            "filename": receipt_path.name,
+                            "status": "flagged",
+                            "issue_type": "no_relevant_information",
+                            "required_review_fields": sorted_required_review_fields,
+                            "matched_notes_files": matched_note_files,
+                            "contradictions": contradictions,
+                            "blocking_contradictions": blocking_contradictions,
+                            "non_blocking_contradictions": non_blocking_contradictions,
+                            "extracted": extracted,
+                            "review_actions": review_actions,
+                        }
+                    )
+                    continue
+
+            if blocking_contradictions:
+                conflict_fields = _build_conflict_review_fields(
+                    source_fields,
+                    {_contradiction_field(item) for item in blocking_contradictions},
                 )
-                logger.emit(
-                    "receipt_flagged",
-                    {
-                        "source_file": receipt_path.name,
-                        "status": "contradiction_detected",
-                        "duration_ms": round((perf_counter() - receipt_started) * 1000, 2),
-                        "matched_notes_files": matched_note_files,
-                        "details": contradictions,
-                    },
-                )
-                detailed_receipts.append(
-                    {
-                        "filename": receipt_path.name,
-                        "status": "flagged",
-                        "issue_type": "contradiction_detected",
-                        "details": contradictions,
-                        "matched_notes_files": matched_note_files,
-                        "extracted": extracted,
-                    }
-                )
-                continue
+                if review_handler is not None and conflict_fields:
+                    decision = review_handler(
+                        ReviewRequest(
+                            issue_type="contradiction_detected",
+                            title="Contradiction Detected",
+                            message=(
+                                "Contradicting source values were found. "
+                                "Choose one source value or enter manual input."
+                            ),
+                            receipt_filename=receipt_path.name,
+                            fields=conflict_fields,
+                        )
+                    )
+                    if decision.action == "cancel_run":
+                        raise RunCancelledError("Run cancelled by user review action.")
+                    review_actions.append(
+                        {
+                            "issue_type": "contradiction_detected",
+                            "action": decision.action,
+                            "resolved_fields": dict(decision.resolved_fields),
+                        }
+                    )
+                    if decision.action == "resolved":
+                        _apply_resolved_fields(decision.resolved_fields, parsed, extracted)
+                        contradictions = detect_contradictions(
+                            {
+                                "file": {
+                                    "vendor": str(parsed.get("vendor", "")).strip(),
+                                    "date": str(parsed.get("date", "")).strip(),
+                                    "amount": str(parsed.get("amount", "")).strip(),
+                                },
+                                "filename": filename_observed_fields,
+                                "notes": parsed_from_notes,
+                            }
+                        )
+                        contradictions = _filter_resolved_contradictions(
+                            contradictions,
+                            decision.resolved_fields,
+                        )
+                        (
+                            blocking_contradictions,
+                            non_blocking_contradictions,
+                        ) = _partition_contradictions(
+                            contradictions,
+                            required_review_fields,
+                        )
+
+                if blocking_contradictions:
+                    exception_rows.append(
+                        build_exception_record(
+                            receipt_path=receipt_path,
+                            record={
+                                "issue_type": "contradiction_detected",
+                                "details": " | ".join(blocking_contradictions),
+                            },
+                            errors=["Contradicting information across sources"],
+                        )
+                    )
+                    logger.emit(
+                        "receipt_flagged",
+                        {
+                            "source_file": receipt_path.name,
+                            "status": "contradiction_detected",
+                            "duration_ms": round((perf_counter() - receipt_started) * 1000, 2),
+                            "matched_notes_files": matched_note_files,
+                            "details": blocking_contradictions,
+                        },
+                    )
+                    detailed_receipts.append(
+                        {
+                            "filename": receipt_path.name,
+                            "status": "flagged",
+                            "issue_type": "contradiction_detected",
+                            "required_review_fields": sorted_required_review_fields,
+                            "details": blocking_contradictions,
+                            "all_contradictions": contradictions,
+                            "blocking_contradictions": blocking_contradictions,
+                            "non_blocking_contradictions": non_blocking_contradictions,
+                            "matched_notes_files": matched_note_files,
+                            "extracted": extracted,
+                            "review_actions": review_actions,
+                        }
+                    )
+                    continue
+
+            if non_blocking_contradictions and not blocking_contradictions:
+                warning_event = {
+                    "warning_type": "non_blocking_contradictions",
+                    "source_file": receipt_path.name,
+                    "details": list(non_blocking_contradictions),
+                    "required_review_fields": sorted_required_review_fields,
+                }
+                logger.emit("receipt_warning", warning_event)
+                if warning_handler is not None:
+                    warning_handler(dict(warning_event))
 
             if not extracted.get("merchant_name") and parsed.get("vendor"):
                 extracted["merchant_name"] = parsed["vendor"]
@@ -243,11 +527,7 @@ def run_pipeline(
                     key=calculate_confidence,
                 )
             else:
-                confidence_row = map_columns_from_keywords(
-                    model_columns=model_columns,
-                    keyword_values=keyword_values,
-                    template_hints=template_hints,
-                )
+                confidence_row = {}
             confidence = calculate_confidence(confidence_row)
             keyword_values["confidence"] = confidence
 
@@ -255,55 +535,113 @@ def run_pipeline(
                 risk_controls.route_low_confidence_to_review
                 and confidence < risk_controls.minimum_auto_accept_confidence
             ):
-                review_level = (
-                    "required"
-                    if confidence < risk_controls.require_manual_review_below
-                    else "recommended"
+                editable_fields = _build_editable_review_fields(
+                    source_fields,
+                    required_review_fields,
                 )
-                low_confidence_record = dict(confidence_row)
-                low_confidence_record["issue_type"] = "low_confidence"
-                low_confidence_record["details"] = (
-                    f"confidence={confidence:.4f} below minimum_auto_accept="
-                    f"{risk_controls.minimum_auto_accept_confidence:.4f}"
-                )
-                low_confidence_record["review_level"] = review_level
-                exception_rows.append(
-                    build_exception_record(
-                        receipt_path=receipt_path,
-                        record=low_confidence_record,
-                        errors=["Low confidence extraction result"],
+                if review_handler is not None and editable_fields:
+                    decision = review_handler(
+                        ReviewRequest(
+                            issue_type="low_confidence",
+                            title="Low Confidence Extraction",
+                            message=(
+                                "Extraction confidence is below the acceptance threshold. "
+                                "Provide manual corrections, skip this receipt, or cancel the run."
+                            ),
+                            receipt_filename=receipt_path.name,
+                            fields=editable_fields,
+                        )
                     )
-                )
-                logger.emit(
-                    "receipt_flagged",
-                    {
-                        "source_file": receipt_path.name,
-                        "status": "low_confidence",
-                        "duration_ms": round((perf_counter() - receipt_started) * 1000, 2),
-                        "matched_notes_files": matched_note_files,
-                        "confidence": confidence,
-                        "minimum_auto_accept_confidence": (
-                            risk_controls.minimum_auto_accept_confidence
-                        ),
-                        "require_manual_review_below": (
-                            risk_controls.require_manual_review_below
-                        ),
-                        "review_level": review_level,
-                    },
-                )
-                detailed_receipts.append(
-                    {
-                        "filename": receipt_path.name,
-                        "status": "flagged",
-                        "issue_type": "low_confidence",
-                        "review_level": review_level,
-                        "matched_notes_files": matched_note_files,
-                        "extracted": extracted,
-                        "processed": processed,
-                        "keywords": keyword_values,
-                    }
-                )
-                continue
+                    if decision.action == "cancel_run":
+                        raise RunCancelledError("Run cancelled by user review action.")
+                    review_actions.append(
+                        {
+                            "issue_type": "low_confidence",
+                            "action": decision.action,
+                            "resolved_fields": dict(decision.resolved_fields),
+                        }
+                    )
+                    if decision.action == "resolved":
+                        _apply_resolved_fields(decision.resolved_fields, parsed, extracted)
+                        processed = process_structured_data(extracted)
+                        keyword_values = {
+                            **extracted,
+                            **processed,
+                            "merchant_name": extracted.get("merchant_name", ""),
+                            "transaction_date": extracted.get("transaction_date", ""),
+                            "transaction_type": extracted.get("transaction_type", ""),
+                            "currency": extracted.get("currency", ""),
+                            "filename": receipt_path.name,
+                        }
+                        confidence_candidates, _, _ = render_rows_from_model_template(
+                            model_columns=model_columns,
+                            model_rows=model_template_rows,
+                            receipt_keyword_rows=[keyword_values],
+                            operation_values={},
+                            template_hints=template_hints,
+                        )
+                        if confidence_candidates:
+                            confidence_row = max(confidence_candidates, key=calculate_confidence)
+                        else:
+                            confidence_row = {}
+                        confidence = calculate_confidence(confidence_row)
+                        keyword_values["confidence"] = confidence
+
+                if confidence < risk_controls.minimum_auto_accept_confidence:
+                    review_level = (
+                        "required"
+                        if confidence < risk_controls.require_manual_review_below
+                        else "recommended"
+                    )
+                    low_confidence_record = dict(confidence_row)
+                    low_confidence_record["issue_type"] = "low_confidence"
+                    low_confidence_record["details"] = (
+                        f"confidence={confidence:.4f} below minimum_auto_accept="
+                        f"{risk_controls.minimum_auto_accept_confidence:.4f}"
+                    )
+                    low_confidence_record["review_level"] = review_level
+                    exception_rows.append(
+                        build_exception_record(
+                            receipt_path=receipt_path,
+                            record=low_confidence_record,
+                            errors=["Low confidence extraction result"],
+                        )
+                    )
+                    logger.emit(
+                        "receipt_flagged",
+                        {
+                            "source_file": receipt_path.name,
+                            "status": "low_confidence",
+                            "duration_ms": round((perf_counter() - receipt_started) * 1000, 2),
+                            "matched_notes_files": matched_note_files,
+                            "confidence": confidence,
+                            "minimum_auto_accept_confidence": (
+                                risk_controls.minimum_auto_accept_confidence
+                            ),
+                            "require_manual_review_below": (
+                                risk_controls.require_manual_review_below
+                            ),
+                            "review_level": review_level,
+                        },
+                    )
+                    detailed_receipts.append(
+                        {
+                            "filename": receipt_path.name,
+                            "status": "flagged",
+                            "issue_type": "low_confidence",
+                            "required_review_fields": sorted_required_review_fields,
+                            "review_level": review_level,
+                            "matched_notes_files": matched_note_files,
+                            "contradictions": contradictions,
+                            "blocking_contradictions": blocking_contradictions,
+                            "non_blocking_contradictions": non_blocking_contradictions,
+                            "extracted": extracted,
+                            "processed": processed,
+                            "keywords": keyword_values,
+                            "review_actions": review_actions,
+                        }
+                    )
+                    continue
 
             accepted_keyword_rows.append(keyword_values)
             accepted_processed_rows.append(processed)
@@ -311,10 +649,15 @@ def run_pipeline(
                 {
                     "filename": receipt_path.name,
                     "status": "processed",
+                    "required_review_fields": sorted_required_review_fields,
                     "matched_notes_files": matched_note_files,
+                    "contradictions": contradictions,
+                    "blocking_contradictions": blocking_contradictions,
+                    "non_blocking_contradictions": non_blocking_contradictions,
                     "extracted": extracted,
                     "processed": processed,
                     "keywords": keyword_values,
+                    "review_actions": review_actions,
                 }
             )
             logger.emit(
@@ -327,6 +670,8 @@ def run_pipeline(
                     "confidence": confidence,
                 },
             )
+        except RunCancelledError:
+            raise
         except Exception as exc:
             exception_rows.append(
                 build_exception_record(

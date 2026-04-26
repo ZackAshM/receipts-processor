@@ -9,6 +9,12 @@ from typing import Any
 
 from receipt_processor.interface_options import OutputType, resolve_output_file
 from receipt_processor.pipeline import run_pipeline
+from receipt_processor.review.models import (
+    ReviewDecision,
+    ReviewField,
+    ReviewRequest,
+    RunCancelledError,
+)
 
 TKINTER_MISSING_HELP = """\
 Tkinter is not available in this Python environment, so the desktop GUI cannot start.
@@ -243,6 +249,174 @@ class ReceiptProcessorGUI:
         self.status_text.see("end")
         self.status_text.configure(state="disabled")
 
+    def _handle_pipeline_warning(self, event: dict[str, object]) -> None:
+        self.root.after(0, self._on_pipeline_warning, dict(event))
+
+    def _on_pipeline_warning(self, event: dict[str, object]) -> None:
+        if event.get("warning_type") != "non_blocking_contradictions":
+            return
+        source_file = str(event.get("source_file", "unknown"))
+        details = event.get("details")
+        detail_count = len(details) if isinstance(details, list) else 0
+        if detail_count > 0:
+            self._log_status(
+                f"Warning ({source_file}): {detail_count} non-blocking contradiction(s) logged."
+            )
+        else:
+            self._log_status(f"Warning ({source_file}): non-blocking contradictions logged.")
+
+    def _create_gui_review_handler(self):
+        def handler(request: ReviewRequest) -> ReviewDecision:
+            result: dict[str, object] = {}
+            ready = threading.Event()
+
+            def show_dialog() -> None:
+                try:
+                    result["decision"] = self._show_review_dialog(request)
+                except Exception as exc:  # pragma: no cover - GUI-specific fallback
+                    result["error"] = exc
+                finally:
+                    ready.set()
+
+            self.root.after(0, show_dialog)
+            ready.wait()
+            if "error" in result:
+                raise RuntimeError(f"Review dialog failed: {result['error']}")
+            decision = result.get("decision")
+            if not isinstance(decision, ReviewDecision):
+                raise RuntimeError("Review dialog returned invalid decision.")
+            return decision
+
+        return handler
+
+    def _show_review_dialog(self, request: ReviewRequest) -> ReviewDecision:
+        self._log_status(
+            f"Review required for {request.receipt_filename}: {request.title}"
+        )
+        resolved_fields: dict[str, str] = {}
+        for field in request.fields:
+            field_result = self._show_field_dialog(request, field)
+            if isinstance(field_result, ReviewDecision):
+                return field_result
+            resolved_fields[field.name] = field_result
+        return ReviewDecision(action="resolved", resolved_fields=resolved_fields)
+
+    def _show_field_dialog(
+        self,
+        request: ReviewRequest,
+        field: ReviewField,
+    ) -> str | ReviewDecision:
+        tk = self.tk
+        ttk = self.ttk
+        dialog = tk.Toplevel(self.root)
+        dialog.title(f"User Review - {field.display_name}")
+        dialog.transient(self.root)
+        dialog.grab_set()
+        dialog.resizable(False, False)
+
+        container = ttk.Frame(dialog, padding=14)
+        container.pack(fill="both", expand=True)
+
+        ttk.Label(
+            container,
+            text=request.title,
+            font=("TkDefaultFont", 11, "bold"),
+        ).grid(row=0, column=0, sticky="w")
+        ttk.Label(
+            container,
+            text=f"Receipt: {request.receipt_filename}",
+        ).grid(row=1, column=0, sticky="w", pady=(2, 6))
+        ttk.Label(
+            container,
+            text=request.message,
+            wraplength=520,
+            justify="left",
+        ).grid(row=2, column=0, sticky="w", pady=(0, 8))
+        ttk.Label(
+            container,
+            text=f"Resolve field: {field.display_name}",
+            font=("TkDefaultFont", 10, "bold"),
+        ).grid(row=3, column=0, sticky="w", pady=(0, 6))
+
+        choice_var = tk.StringVar(value="manual" if not field.options else "")
+        manual_var = tk.StringVar(value="")
+
+        options_frame = ttk.Frame(container)
+        options_frame.grid(row=4, column=0, sticky="ew")
+        for idx, option in enumerate(field.options):
+            source = option.source or "unknown"
+            label = option.label or option.value
+            value = f"option:{idx}"
+            ttk.Radiobutton(
+                options_frame,
+                text=f"(from {source}) {label}",
+                variable=choice_var,
+                value=value,
+            ).grid(row=idx, column=0, sticky="w")
+
+        manual_row = len(field.options)
+        ttk.Radiobutton(
+            options_frame,
+            text="Manual input:",
+            variable=choice_var,
+            value="manual",
+        ).grid(row=manual_row, column=0, sticky="w", pady=(8, 0))
+        manual_entry = ttk.Entry(options_frame, textvariable=manual_var, width=56)
+        manual_entry.grid(row=manual_row + 1, column=0, sticky="ew", pady=(4, 0))
+
+        button_frame = ttk.Frame(container)
+        button_frame.grid(row=5, column=0, sticky="e", pady=(12, 0))
+        outcome: dict[str, object] = {}
+
+        def on_apply() -> None:
+            choice = choice_var.get().strip()
+            if choice.startswith("option:"):
+                try:
+                    idx = int(choice.split(":", maxsplit=1)[1])
+                except ValueError:
+                    self.messagebox.showerror("Invalid Selection", "Please select a valid option.")
+                    return
+                if 0 <= idx < len(field.options):
+                    outcome["result"] = field.options[idx].value
+                    dialog.destroy()
+                    return
+            if choice == "manual":
+                manual_text = manual_var.get().strip()
+                if manual_text:
+                    outcome["result"] = manual_text
+                    dialog.destroy()
+                    return
+                self.messagebox.showerror(
+                    "Missing Value",
+                    f"Please enter a value for {field.display_name}.",
+                )
+                return
+            self.messagebox.showerror("Missing Selection", "Please choose an option.")
+
+        def on_skip() -> None:
+            outcome["result"] = ReviewDecision(action="skip_receipt")
+            dialog.destroy()
+
+        def on_cancel() -> None:
+            outcome["result"] = ReviewDecision(action="cancel_run")
+            dialog.destroy()
+
+        ttk.Button(button_frame, text="Apply Choice", command=on_apply).pack(
+            side="left", padx=(0, 8)
+        )
+        ttk.Button(button_frame, text="Skip Receipt", command=on_skip).pack(
+            side="left", padx=(0, 8)
+        )
+        ttk.Button(button_frame, text="Cancel Run", command=on_cancel).pack(side="left")
+
+        dialog.protocol("WM_DELETE_WINDOW", on_cancel)
+        manual_entry.focus_set()
+        self.root.wait_window(dialog)
+        result = outcome.get("result")
+        if isinstance(result, ReviewDecision):
+            return result
+        return str(result or "")
+
     def _run_pipeline(self) -> None:
         input_dir = Path(self.input_dir_var.get().strip())
         if not input_dir.exists() or not input_dir.is_dir():
@@ -298,8 +472,12 @@ class ReceiptProcessorGUI:
                 output_file=output_file,
                 log_dir=log_dir,
                 risk_controls_file=risk_controls_file,
+                review_handler=self._create_gui_review_handler(),
+                warning_handler=self._handle_pipeline_warning,
             )
             self.root.after(0, self._on_run_success, output_file)
+        except RunCancelledError:
+            self.root.after(0, self._on_run_cancelled)
         except Exception as exc:  # pragma: no cover - GUI error handling
             self.root.after(0, self._on_run_error, str(exc))
 
@@ -310,6 +488,10 @@ class ReceiptProcessorGUI:
     def _on_run_error(self, error: str) -> None:
         self._log_status(f"Failed: {error}")
         self.messagebox.showerror("Run Failed", error)
+        self.run_button.configure(state="normal")
+
+    def _on_run_cancelled(self) -> None:
+        self._log_status("Run cancelled by user.")
         self.run_button.configure(state="normal")
 
 
@@ -327,4 +509,3 @@ if __name__ == "__main__":
     except RuntimeError as exc:
         print(str(exc), file=sys.stderr)
         raise SystemExit(1) from exc
-

@@ -31,16 +31,51 @@ MONEY_FIELDS = {
 
 DATE_INPUT_FORMATS = ("%Y-%m-%d", "%Y/%m/%d", "%m/%d/%Y", "%m-%d-%Y")
 
-COLUMN_ALIAS_MAP = {
-    "date": "transaction_date",
-    "description": "description",
-    "amt_claimed_usd": "true_expense",
-    "amount_claimed": "true_expense",
-    "amount": "true_expense",
-    "receipt_amt_if_different_from_amt_claimed": "receipt_amount_if_different",
-    "receipt_amount_if_different_from_amount_claimed": "receipt_amount_if_different",
-    "receipt_amount": "receipt_expense",
+MONEY_REVIEW_KEYS = {
+    "amount",
+    "amount_paid",
+    "true_expense",
+    "receipt_expense",
+    "receipt_amount_if_different",
+    "subtotal",
+    "tax",
+    "tip",
+    "service_charge",
+    "pre_tip_total",
+    "contributing_items_total",
+    "noncontributing_items_total",
 }
+
+
+def _keyword_to_review_fields(keyword: str) -> set[str]:
+    normalized = _normalize_label(keyword)
+    if normalized in {"transaction_date", "date"}:
+        return {"date"}
+    if normalized in {"transaction_type", "expense_type"}:
+        return {"expense_type"}
+    if normalized in {"merchant_name", "vendor"}:
+        return {"vendor"}
+    if normalized == "description":
+        return {"vendor", "expense_type"}
+    if normalized in MONEY_REVIEW_KEYS:
+        return {"amount"}
+    return set()
+
+
+def infer_required_review_fields(
+    model_columns: list[str],
+    model_rows: list[dict[str, str]],
+) -> set[str]:
+    """Infer which review fields can affect final model output."""
+    _ = model_columns
+    required: set[str] = set()
+
+    for row in model_rows:
+        for value in row.values():
+            text = str(value or "")
+            for match in KEYWORD_TOKEN_RE.finditer(text):
+                required.update(_keyword_to_review_fields(match.group(1)))
+    return required
 
 
 def _normalize_label(label: str) -> str:
@@ -112,28 +147,9 @@ def _row_has_operation_tokens(row: dict[str, str]) -> bool:
     return any(OPERATION_TOKEN_RE.search(str(value or "")) for value in row.values())
 
 
-def map_columns_from_keywords(
-    model_columns: list[str],
-    keyword_values: dict[str, object],
-    template_hints: TemplateHints | None = None,
-) -> dict[str, str]:
-    """Best-effort column mapping when explicit keyword placeholders are absent."""
-    hints = template_hints or TemplateHints()
-    normalized_keyword_map = {
-        _normalize_label(str(key)): str(key)
-        for key in keyword_values.keys()
-    }
-    row: dict[str, str] = {}
-    for column in model_columns:
-        normalized = _normalize_label(column)
-        alias_key = COLUMN_ALIAS_MAP.get(normalized)
-        if alias_key and alias_key in keyword_values:
-            key = alias_key
-        else:
-            key = normalized_keyword_map.get(normalized, alias_key or normalized)
-        value = keyword_values.get(key)
-        row[column] = _format_value(key, value, hints)
-    return row
+def has_keyword_placeholders(model_rows: list[dict[str, str]]) -> bool:
+    """Return True when any model row contains at least one {{keyword}} token."""
+    return any(_row_has_keyword_tokens(row) for row in model_rows)
 
 
 def render_rows_from_model_template(
@@ -148,14 +164,15 @@ def render_rows_from_model_template(
     unknown_keywords: set[str] = set()
     unknown_operations: set[str] = set()
 
-    has_keyword_rows = any(_row_has_keyword_tokens(row) for row in model_rows)
+    has_keyword_rows = has_keyword_placeholders(model_rows)
 
     if not model_rows:
-        if not receipt_keyword_rows:
-            return [], unknown_keywords, unknown_operations
-        # Header-only model fallback.
-        rows = [map_columns_from_keywords(model_columns, receipt_values, hints) for receipt_values in receipt_keyword_rows]
-        return rows, unknown_keywords, unknown_operations
+        if receipt_keyword_rows:
+            raise ValueError(
+                "Model template must include at least one {{keyword}} placeholder row. "
+                "Alias-based column mapping is no longer supported."
+            )
+        return [], unknown_keywords, unknown_operations
 
     if not receipt_keyword_rows:
         # Keep operation-only templates renderable when no receipts are accepted.
@@ -180,8 +197,10 @@ def render_rows_from_model_template(
         return rendered_rows, unknown_keywords, unknown_operations
 
     if not has_keyword_rows:
-        rows = [map_columns_from_keywords(model_columns, receipt_values, hints) for receipt_values in receipt_keyword_rows]
-        return rows, unknown_keywords, unknown_operations
+        raise ValueError(
+            "Model template must include at least one {{keyword}} placeholder row. "
+            "Alias-based column mapping is no longer supported."
+        )
 
     rendered_rows: list[dict[str, str]] = []
     default_values = receipt_keyword_rows[0]

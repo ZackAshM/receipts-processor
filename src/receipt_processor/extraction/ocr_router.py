@@ -9,6 +9,8 @@ from pathlib import Path
 
 from receipt_processor.io.format_detector import detect_receipt_format
 
+PDF_MIN_TEXT_CHARS_FOR_SKIP_OCR = 60
+
 
 @dataclass(frozen=True)
 class OCRLine:
@@ -35,15 +37,30 @@ def _extract_text_from_pdf(receipt_path: Path) -> str:
         return ""
 
     text_parts: list[str] = []
+    min_chars = PDF_MIN_TEXT_CHARS_FOR_SKIP_OCR
+    try:
+        min_chars = int(
+            os.environ.get(
+                "RECEIPT_PROCESSOR_PDF_MIN_TEXT_CHARS",
+                str(PDF_MIN_TEXT_CHARS_FOR_SKIP_OCR),
+            )
+        )
+    except (TypeError, ValueError):
+        min_chars = PDF_MIN_TEXT_CHARS_FOR_SKIP_OCR
+    min_chars = max(0, min_chars)
+
     try:
         reader = PdfReader(str(receipt_path))
         for page in reader.pages:
             page_text = page.extract_text() or ""
-            if page_text.strip():
+            normalized_page_text = " ".join(page_text.split())
+            if normalized_page_text:
                 text_parts.append(page_text)
 
-            # Fallback for image-only PDFs (common for phone scans/screenshots).
-            if page_text.strip():
+            needs_page_ocr = len(normalized_page_text) < min_chars
+
+            # Fallback for image-only or low-text PDFs (common for scans/screenshots).
+            if not needs_page_ocr:
                 continue
             try:
                 images = list(page.images)

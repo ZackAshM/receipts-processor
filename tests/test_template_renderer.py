@@ -1,7 +1,12 @@
 from __future__ import annotations
 
+import pytest
+
 from receipt_processor.io.template_loader import TemplateHints
-from receipt_processor.io.template_renderer import render_rows_from_model_template
+from receipt_processor.io.template_renderer import (
+    infer_required_review_fields,
+    render_rows_from_model_template,
+)
 
 
 def test_template_renderer_renders_keywords_and_operations() -> None:
@@ -43,7 +48,7 @@ def test_template_renderer_renders_keywords_and_operations() -> None:
     assert rows[2]["Amt Claimed (USD)"] == "$22.34"
 
 
-def test_template_renderer_fallbacks_to_column_alias_mapping() -> None:
+def test_template_renderer_requires_keyword_placeholders_when_receipts_exist() -> None:
     model_columns = ["Date", "Description", "Amt Claimed (USD)"]
     model_rows: list[dict[str, str]] = []
     receipt_keywords = [
@@ -51,17 +56,14 @@ def test_template_renderer_fallbacks_to_column_alias_mapping() -> None:
     ]
     hints = TemplateHints(date_output_format="%Y %m %d", currency_symbol="$")
 
-    rows, _, _ = render_rows_from_model_template(
-        model_columns=model_columns,
-        model_rows=model_rows,
-        receipt_keyword_rows=receipt_keywords,
-        operation_values={},
-        template_hints=hints,
-    )
-
-    assert rows[0]["Date"] == "2026 04 25"
-    assert rows[0]["Description"] == "Food - Cafe"
-    assert rows[0]["Amt Claimed (USD)"] == "$12.34"
+    with pytest.raises(ValueError, match="Alias-based column mapping is no longer supported"):
+        render_rows_from_model_template(
+            model_columns=model_columns,
+            model_rows=model_rows,
+            receipt_keyword_rows=receipt_keywords,
+            operation_values={},
+            template_hints=hints,
+        )
 
 
 def test_template_renderer_supports_operation_rows_with_no_receipts() -> None:
@@ -80,3 +82,25 @@ def test_template_renderer_supports_operation_rows_with_no_receipts() -> None:
     assert unknown_keywords == set()
     assert unknown_operations == set()
     assert rows == [{"Label": "Total", "Value": "$0.00"}]
+
+
+def test_infer_required_review_fields_from_keyword_templates() -> None:
+    model_columns = ["Date", "Description", "Amt Claimed (USD)"]
+    model_rows = [
+        {
+            "Date": "{{transaction_date}}",
+            "Description": "{{description}}",
+            "Amt Claimed (USD)": "{{true_expense}}",
+        }
+    ]
+
+    required = infer_required_review_fields(model_columns=model_columns, model_rows=model_rows)
+    assert required == {"date", "vendor", "expense_type", "amount"}
+
+
+def test_infer_required_review_fields_without_keyword_placeholders_is_empty() -> None:
+    model_columns = ["Amt Claimed (USD)"]
+    model_rows: list[dict[str, str]] = []
+
+    required = infer_required_review_fields(model_columns=model_columns, model_rows=model_rows)
+    assert required == set()

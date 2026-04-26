@@ -9,6 +9,8 @@ import typer
 
 from receipt_processor.interface_options import OutputType, resolve_output_file
 from receipt_processor.pipeline import run_pipeline
+from receipt_processor.review.cli_resolver import create_cli_review_handler
+from receipt_processor.review.models import RunCancelledError
 
 app = typer.Typer(
     help=(
@@ -74,14 +76,47 @@ def run(
 ) -> None:
     """Run the extraction pipeline directly from the command line."""
     resolved_output = resolve_output_file(input_dir, output_file, output_type)
-    run_pipeline(
-        input_dir=input_dir,
-        model_file=model_file,
-        example_file=example_file,
-        output_file=resolved_output,
-        log_dir=log_dir,
-        risk_controls_file=risk_controls_file,
-    )
+    review_handler = None
+
+    def warning_handler(event: dict[str, object]) -> None:
+        if event.get("warning_type") != "non_blocking_contradictions":
+            return
+        source_file = str(event.get("source_file", "unknown"))
+        details = event.get("details")
+        if isinstance(details, list):
+            detail_text = "; ".join(str(item) for item in details)
+        else:
+            detail_text = str(details or "")
+        if detail_text:
+            typer.echo(
+                (
+                    f"Warning: {source_file} has non-blocking contradictions "
+                    f"(kept in detailed output): {detail_text}"
+                ),
+                err=True,
+            )
+        else:
+            typer.echo(
+                f"Warning: {source_file} has non-blocking contradictions (kept in detailed output).",
+                err=True,
+            )
+
+    if sys.stdin.isatty() and sys.stdout.isatty():
+        review_handler = create_cli_review_handler()
+    try:
+        run_pipeline(
+            input_dir=input_dir,
+            model_file=model_file,
+            example_file=example_file,
+            output_file=resolved_output,
+            log_dir=log_dir,
+            risk_controls_file=risk_controls_file,
+            review_handler=review_handler,
+            warning_handler=warning_handler,
+        )
+    except RunCancelledError:
+        typer.echo("Run cancelled by user.", err=True)
+        raise typer.Exit(code=1)
     typer.echo(f"Export complete: {resolved_output}")
 
 

@@ -36,6 +36,9 @@ src/receipt_processor/quality/confidence.py
 src/receipt_processor/quality/consistency.py
 src/receipt_processor/quality/exception_queue.py
 src/receipt_processor/quality/validation.py
+src/receipt_processor/review/__init__.py
+src/receipt_processor/review/cli_resolver.py
+src/receipt_processor/review/models.py
 tests/test_cli.py
 tests/test_detailed_json_output.py
 tests/test_exporter.py
@@ -45,6 +48,7 @@ tests/test_interface_options.py
 tests/test_model_contract_pipeline.py
 tests/test_notes_and_flags.py
 tests/test_ocr_router_pdf_fallback.py
+tests/test_review_resolution.py
 tests/test_risk_controls_and_exceptions.py
 tests/test_runtime_logger.py
 tests/test_schema_mapping.py

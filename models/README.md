@@ -18,6 +18,7 @@ Rules:
 - Text outside placeholders is treated as literal text.
 - You can combine literal text + placeholders in one cell.
 - Unknown placeholders are expected to be flagged for review by the pipeline.
+- Alias-based column inference is not supported. Models must explicitly use placeholders.
 
 Examples:
 - `{{transaction_date}}`
