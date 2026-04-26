@@ -1683,3 +1683,30 @@ No other regressions stood out in the diff. The key improvements you added look 
 
 Verification: local tests pass (`55 passed`).
 ```
+
+Codex 2026-04-26 16:24:00 CDT
+- Implemented the follow-up fixes from your review and validated all tests.
+
+Changes made:
+1. Early unknown-token preflight.
+- Added `SUPPORTED_TEMPLATE_KEYWORDS`, `SUPPORTED_TEMPLATE_OPERATIONS`, and `collect_template_tokens(...)` in `template_renderer.py`.
+- Added preflight validation in `pipeline.py` immediately after model loading to fail before receipt processing if unknown `{{...}}` or `<...>` tokens exist.
+- Kept end-of-run unknown-token detection as defense-in-depth.
+
+2. Reproducibility docs alignment.
+- Updated README quick start to install from `requirements.lock.txt` (removed `requirements.txt` quick-start install step).
+
+3. SBOM workflow resilience.
+- Updated `.github/workflows/security.yml` so SBOM generation happens before strict audit failure can stop the job.
+- SBOM upload now uses `if: always()`.
+- Added fallback creation of `{}` when `sbom.cdx.json` is missing.
+- Kept strict audit as a failing gate after SBOM artifact creation/upload.
+
+Tests:
+- Added/updated tests in `tests/test_model_contract_pipeline.py` for preflight unknown-token failure behavior.
+- Updated `tests/test_risk_controls_and_exceptions.py` low-confidence test token to a supported keyword.
+- Ran full suite: `PYTHONPATH=src .venv/bin/python -m pytest -q` -> `56 passed`.
+
+Logging policy:
+- Updated `docs/CODEX_LOG.md` with one-response-lag append behavior.
+- Used redacted path placeholders (`[REDACTED_PATH]`) for sensitive local paths.

@@ -32,3 +32,13 @@
 - If parsing quality degrades, inspect `data/output` and exception metadata.
 - Validate model headers before each run.
 - Keep original receipts unchanged in source folders.
+
+## CODEX_LOG Redaction Script
+
+- Use `scripts/redact_codex_log.py` after each `docs/CODEX_LOG.md` append to enforce policy redaction.
+- Full-file pass (recommended periodically):
+  - `.venv/bin/python scripts/redact_codex_log.py --lines 999999`
+- Incremental pass after routine updates:
+  - `.venv/bin/python scripts/redact_codex_log.py --lines 2000`
+- Optional custom log target:
+  - `.venv/bin/python scripts/redact_codex_log.py --file docs/CODEX_LOG.md --lines 2000`
