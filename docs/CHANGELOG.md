@@ -24,10 +24,12 @@
 - Added optional notes-file ingestion (`notes.txt`, receipt-specific notes names) for extraction enrichment.
 - Added null-result flagging and contradiction detection between file text, filename inference, and notes context.
 - Added sidecar exception export (`*_exceptions.csv`) for flagged records.
-- Added per-user structured runtime logging in JSONL format for performance evaluation and debugging.
+- Added structured runtime logging in JSONL format for performance evaluation and debugging.
 - Added spreadsheet sanitization for exception sidecar CSV exports.
 - Enforced low-confidence routing using loaded runtime thresholds from `configs/risk_controls.yaml`.
-- Added optional log privacy mode to mask user/file identifiers in telemetry.
+- Added optional log privacy mode to mask file identifiers in telemetry.
+- Updated runtime logging layout to write directly under `logs/` and removed `user_id` from emitted telemetry events.
+- Added GitHub Actions workflows for automated CI tests and dependency vulnerability scanning.
 - Updated CLI UX to support direct positional invocation (`receipts_processor <input_dir>`) with optional flags.
 - Changed CLI default output location to `<input_dir>/Expenses.csv` when `--output-file` is omitted.
 - Added `--output-type` (`csv` default, optional `xlsx`) for output format selection.

@@ -22,8 +22,8 @@ I am building a receipt-to-expense pipeline that:
 - Spreadsheet formula-injection sanitization for exported cell values.
 - Null-result and contradiction flagging with sidecar exception export (`*_exceptions.csv`).
 - Low-confidence routing enforced via `configs/risk_controls.yaml` thresholds.
-- Per-user structured runtime logs for performance/debugging (`logs/users/<user_id>/...jsonl`).
-- Optional log privacy mode to mask identifiers in runtime telemetry.
+- Structured runtime logs for performance/debugging (`logs/performance-YYYY-MM-DD.jsonl`).
+- Optional log privacy mode to mask sensitive file-level identifiers in runtime telemetry.
 
 ## What I Directed
 
@@ -124,7 +124,7 @@ If `_tkinter` import fails, install Tk support for your Python:
 
 - Main export: `Expenses.csv` (or `.xlsx` if you choose that extension)
 - Flagged records: `Expenses_exceptions.csv`
-- Runtime performance/debug logs: `logs/users/<user_id>/performance-YYYY-MM-DD.jsonl`
+- Runtime performance/debug logs: `logs/performance-YYYY-MM-DD.jsonl`
 
 ## Product Management Evidence
 

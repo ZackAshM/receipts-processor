@@ -8,7 +8,7 @@
 4. Choose `models/model.csv` or `models/model.xlsx`.
 5. Run CLI command to generate output file.
 6. Review low-confidence rows and the sidecar exception file (`*_exceptions.csv`) for null/contradiction flags.
-7. Review runtime logs under `logs/users/<user_id>/performance-YYYY-MM-DD.jsonl` for performance/debug diagnostics.
+7. Review runtime logs under `logs/performance-YYYY-MM-DD.jsonl` for performance/debug diagnostics.
 8. Tune confidence routing in `configs/risk_controls.yaml` (or pass `--risk-controls-file`) as needed.
 
 ## Security Controls in Runtime
@@ -18,7 +18,7 @@
 - Do not place credentials in filenames, receipt images, or prompt text.
 - Runtime logs intentionally avoid raw receipt text and focus on operational metadata.
 - Exception sidecar exports are sanitized to prevent spreadsheet-formula execution.
-- Optional runtime privacy mode can mask user/file identifiers in telemetry (`RECEIPT_PROCESSOR_LOG_PRIVACY_MODE=redacted`).
+- Optional runtime privacy mode can mask file-level identifiers in telemetry (`RECEIPT_PROCESSOR_LOG_PRIVACY_MODE=redacted`).
 
 ## Human-in-the-Loop Controls
 

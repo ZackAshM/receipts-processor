@@ -947,3 +947,130 @@ I also removed the earlier standalone “GUI Quick Start” block so the instruc
 
 # User
 Maybe "use a Python build that includes tkinter" is not helpful. Include possible options, like `brew install python-tk`
+
+---
+
+# Codex
+Updated in `README.md` with concrete tkinter install options, including:
+
+- Ubuntu/Debian: `sudo apt-get install python3-tk`
+- Fedora: `sudo dnf install python3-tkinter`
+- macOS (Homebrew): `brew install python-tk` (or `brew install tcl-tk`)
+- Fallback for macOS/Windows: install Python from [python.org](https://www.python.org/downloads/) with tkinter support, then recreate the venv.
+
+---
+
+# User
+Ok, great I've modified the repo with changes I wanted and merged the branch to main. Please review our work so far.
+
+---
+
+# Codex
+**Findings (Priority Order)**
+1. `[P1]` File-vs-filename contradiction detection is effectively bypassed for overlapping fields.  
+   In the pipeline, filename inference is called with file-extracted fields (`pipeline.py:94`), and filename extraction only sets `amount/date/vendor` when those fields are missing (`filename_inference.py:52`, `filename_inference.py:56`, `filename_inference.py:60`).  
+   So contradictions between OCR text and filename for those same fields won’t be surfaced in `pipeline.py:96`.
+
+2. `[P2]` “Redacted” logging mode still exposes raw user identity in directory names.  
+   Even when redaction is enabled and event payload identifiers are hashed (`runtime_logger.py:84`), log files are still written under `logs/users/<raw_user_id>/...` (`runtime_logger.py:74`).  
+   That weakens privacy guarantees for environments where usernames are sensitive.
+
+3. `[P2]` CI quality/security enforcement is still missing.  
+   I didn’t find any `.github/workflows/*` pipeline, so test/security checks remain manual only.
+
+**Open Questions / Assumptions**
+1. For contradiction handling, should we always compare raw filename-derived signals against file/notes signals (even if we do not use filename values for final mapping)?
+2. For privacy mode, do you want per-user partitioning preserved with hashed user IDs (for example `users/user_<hash>`), or a single run-based partition instead?
+
+**Snapshot**
+- Good news: the previous high-priority issues you were told about are largely addressed:
+  - exception sidecar sanitization is in place (`exception_queue.py:41`)
+  - confidence thresholds are loaded and enforced (`pipeline.py:60`, `pipeline.py:179`)
+- Current tests pass locally: `30 passed`.
+- I also appended the latest prior-turn entries to `docs/CODEX_LOG.md` per your one-response-lag rule.
+
+---
+
+# User
+The current extraction does not seem so smart; it currently pulls things I would not consider the "answer". Nonetheless, I don't know how you could make it smarter without user intervention or being too specific. I think we'll let an LLM feature handle that later in a new branch when we're ready. So I guess there's no current answer for the contradiction handling.
+
+For the redacted logging mode, sure we can remove user entirely. When I said "per-user", I just meant the contents of `log/` would never be public (in github for example), it is just a place where logs will eventually be stored when any one person runs the app after a fresh install. So just put the contents directly in `log/` instead of `log/user`
+
+I don't have experience with `.github/workflows/*` so let me know what it's needed for and I can approve creation of it.
+
+---
+
+# Codex
+Contradiction handling decision makes sense for now; we can defer “smart” resolution to the later LLM branch.
+
+I also updated `docs/CODEX_LOG.md` for the previous exchange (with sensitive absolute paths redacted).
+
+What `.github/workflows` is for:
+- It is GitHub Actions automation that runs checks on every push/PR.
+- It prevents regressions from being merged unnoticed.
+- It gives you portfolio-grade evidence of delivery governance (tests/security gates are enforced, not manual).
+
+Recommended minimal setup:
+1. `ci.yml`  
+   - Trigger: push + pull_request  
+   - Runs: install package, run tests (`pytest -q`)  
+2. `security.yml`  
+   - Trigger: push + pull_request + weekly schedule  
+   - Runs: dependency vulnerability scan (`pip-audit`)
+
+Planned logging/privacy change (per your direction):
+1. Stop using `logs/users/...`; write directly under `logs/` (or provided `--log-dir` root).
+2. Remove `user_id` from runtime log records entirely (all modes).
+3. Keep useful fields like `run_id`, `timestamp`, `event_type`, status/confidence.
+4. Update tests/docs accordingly.
+
+If you approve, I’ll implement both:
+1. logging refactor now
+2. initial `.github/workflows` CI + security gates
+
+---
+
+# User
+All righty, go for it.
+
+---
+
+# Codex
+Implemented both approved changes.
+
+**What Changed**
+- Logging now writes directly under log root and no longer includes `user_id` in events:
+  - `runtime_logger.py`
+- Updated runtime logging tests to match new behavior:
+  - `test_runtime_logger.py`
+  - `test_notes_and_flags.py`
+- Added GitHub Actions workflows:
+  - CI tests on push/PR: `ci.yml`
+  - Dependency vulnerability audit (`pip-audit`) on push/PR + weekly: `security.yml`
+- Updated docs/config examples for new logging shape:
+  - `README.md`
+  - `.env.example`
+  - `docs/OPERATIONS.md`
+  - `docs/ARCHITECTURE.md`
+  - `src/receipt_processor/observability/README.md`
+  - `tests/README.md`
+  - `docs/CHANGELOG.md`
+
+**Validation**
+- Ran: `PYTHONPATH=src .venv/bin/python -m pytest -q`
+- Result: `30 passed`
+
+**Log Policy**
+- I updated `docs/CODEX_LOG.md` at the start of this response cycle per your one-response-lag rule.
+
+**Important Git Governance Note**
+- I did not stage anything.
+- `.github/workflows/*` are new untracked files, so per your rules you’ll need to `git add` those yourself when ready.
+
+Natural next step:
+1. If you want, I can now review `git diff` with you and propose a commit message once you’ve staged.
+
+---
+
+# User
+all right, I've staged it. Please update CODEX_LOG.md, add it, then commit the changes with an appropriate message

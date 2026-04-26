@@ -107,7 +107,7 @@ def test_pipeline_flags_null_and_contradictory_results(tmp_path: Path) -> None:
     assert "contradiction_detected" in issue_types
 
 
-def test_pipeline_emits_per_user_runtime_logs(tmp_path: Path, monkeypatch) -> None:
+def test_pipeline_emits_runtime_logs(tmp_path: Path) -> None:
     inbox = tmp_path / "inbox"
     inbox.mkdir()
     (inbox / "lyft.png").write_bytes(b"not-an-image")
@@ -115,8 +115,6 @@ def test_pipeline_emits_per_user_runtime_logs(tmp_path: Path, monkeypatch) -> No
         "vendor: Lyft\ndate: 2025-06-25\namount: 54.91\nexpense_type: Transportation\n",
         encoding="utf-8",
     )
-
-    monkeypatch.setenv("RECEIPT_PROCESSOR_USER_ID", "qa_user")
 
     output = tmp_path / "Expenses.csv"
     logs_dir = tmp_path / "logs"
@@ -128,8 +126,7 @@ def test_pipeline_emits_per_user_runtime_logs(tmp_path: Path, monkeypatch) -> No
         log_dir=logs_dir,
     )
 
-    user_logs = logs_dir / "users" / "qa_user"
-    files = list(user_logs.glob("performance-*.jsonl"))
+    files = list(logs_dir.glob("performance-*.jsonl"))
     assert len(files) == 1
 
     lines = files[0].read_text(encoding="utf-8").splitlines()
