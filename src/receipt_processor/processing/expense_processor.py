@@ -91,7 +91,11 @@ def _fallback_legacy_line_items(extracted: dict[str, Any]) -> list[dict[str, Any
 
 def _partition_line_items(
     line_items: list[dict[str, Any]],
+    *,
+    highlight_detection_available: bool,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]], bool]:
+    if not highlight_detection_available:
+        return list(line_items), [], False
     highlighted = [item for item in line_items if bool(item.get("is_highlighted"))]
     if highlighted:
         noncontributing = [item for item in line_items if not bool(item.get("is_highlighted"))]
@@ -132,7 +136,11 @@ def process_structured_data(extracted: dict[str, Any]) -> dict[str, Any]:
         # Backward compatibility for older extraction payloads.
         line_items = _fallback_legacy_line_items(extracted)
 
-    contributing_items, noncontributing_items, has_highlighted_contributions = _partition_line_items(line_items)
+    highlight_detection_available = bool(_to_bool(extracted.get("highlight_detection_available", False)))
+    contributing_items, noncontributing_items, has_highlighted_contributions = _partition_line_items(
+        line_items,
+        highlight_detection_available=highlight_detection_available,
+    )
     contributing_total = _round_money(_sum_item_amounts(contributing_items)) or 0.0
     noncontributing_total = _round_money(_sum_item_amounts(noncontributing_items)) or 0.0
     effective_noncontributing_total = _round_money(_sum_effective_noncontributing(noncontributing_items)) or 0.0
@@ -216,6 +224,7 @@ def process_structured_data(extracted: dict[str, Any]) -> dict[str, Any]:
         "contributing_items_count": len(contributing_items),
         "noncontributing_items_count": len(noncontributing_items),
         "has_highlighted_contributions": has_highlighted_contributions,
+        "highlight_detection_available": highlight_detection_available,
         "contributing_item_names": " | ".join(
             str(item.get("name", "")).strip() for item in contributing_items if str(item.get("name", "")).strip()
         ),

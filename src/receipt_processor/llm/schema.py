@@ -74,12 +74,11 @@ def _normalize_items(raw_items: object, field_name: str) -> list[dict[str, Any]]
         amount = _to_float(item.get("amount"))
         if not name or amount is None:
             continue
-        highlighted = _to_bool(item.get("is_highlighted"))
         normalized.append(
             {
                 "name": name,
                 "amount": amount,
-                "is_highlighted": bool(highlighted),
+                "is_highlighted": False,
                 "source": "llm",
             }
         )
@@ -134,6 +133,57 @@ def _partition_items(
         non_contributing = [item for item in items if (item["name"], item["amount"]) not in highlighted_keys]
         return highlighted, non_contributing
     return list(items), []
+
+
+def _normalize_name(value: object) -> str:
+    return " ".join(str(value or "").lower().split())
+
+
+def _apply_deterministic_highlights(
+    *,
+    items: list[dict[str, Any]],
+    deterministic_items: list[dict[str, Any]],
+    highlight_detection_available: bool,
+) -> list[dict[str, Any]]:
+    projected: list[dict[str, Any]] = []
+    if not highlight_detection_available:
+        for item in items:
+            next_item = dict(item)
+            next_item["is_highlighted"] = False
+            projected.append(next_item)
+        return projected
+
+    highlighted_pairs: set[tuple[str, float]] = set()
+    highlighted_amount_counts: dict[float, int] = {}
+    for item in deterministic_items:
+        if not bool(item.get("is_highlighted")):
+            continue
+        amount = _to_float(item.get("amount"))
+        if amount is None:
+            continue
+        key = (_normalize_name(item.get("name", "")), amount)
+        highlighted_pairs.add(key)
+        highlighted_amount_counts[amount] = highlighted_amount_counts.get(amount, 0) + 1
+
+    used_amount_counts: dict[float, int] = {}
+    for item in items:
+        next_item = dict(item)
+        amount = _to_float(next_item.get("amount"))
+        key = (_normalize_name(next_item.get("name", "")), amount if amount is not None else 0.0)
+        is_highlighted = False
+        if amount is not None:
+            if key in highlighted_pairs:
+                is_highlighted = True
+            else:
+                allowed = highlighted_amount_counts.get(amount, 0)
+                used = used_amount_counts.get(amount, 0)
+                if allowed > used:
+                    is_highlighted = True
+            if is_highlighted:
+                used_amount_counts[amount] = used_amount_counts.get(amount, 0) + 1
+        next_item["is_highlighted"] = is_highlighted
+        projected.append(next_item)
+    return projected
 
 
 def _merge_legacy_partitioned_items(
@@ -204,10 +254,17 @@ def normalize_llm_payload(
                 noncontributing_items=list(merged.get("noncontributing_items", [])),
             )
 
+    highlight_detection_available = bool(deterministic_base.get("highlight_detection_available", False))
+    line_items = _apply_deterministic_highlights(
+        items=line_items,
+        deterministic_items=list(deterministic_base.get("line_items", [])),
+        highlight_detection_available=highlight_detection_available,
+    )
+
     contributing_items, noncontributing_items = _partition_items(
         line_items,
         allow_highlight_partition=bool(
-            deterministic_base.get("highlight_detection_available", False)
+            highlight_detection_available
         ),
     )
 

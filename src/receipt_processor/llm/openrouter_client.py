@@ -40,7 +40,7 @@ SYSTEM_PROMPT = (
     "\"service_charge\": number|null, "
     "\"pre_tip_total\": number|null, "
     "\"amount_paid\": number|null, "
-    "\"line_items\": [{\"name\": string, \"amount\": number, \"is_highlighted\": boolean}], "
+    "\"line_items\": [{\"name\": string, \"amount\": number}], "
     "\"used_keywords\": {\"field_name\": \"evidence snippet\"}, "
     "\"confidence\": number|null, "
     "\"needs_review\": boolean|null"

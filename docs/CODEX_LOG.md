@@ -2215,3 +2215,18 @@ Also updated [CODEX_LOG.md](<REDACTED_PATH>) and ran the redaction script over t
 
 User 2026-04-26 23:31:39 CDT
 Ok, I've staged for commit. Please update and add the CODEX_LOG.md and then commit with an appropriate message
+
+Codex 2026-04-26 23:48:15 CDT
+Updated and redacted [CODEX_LOG.md](<REDACTED_PATH>), staged it, and committed your staged changes.
+
+Commit:
+- `0551da4`
+- `Enforce line-item highlight partitioning and robust date normalization`
+
+::git-stage{cwd="<REDACTED_PATH>"}
+::git-commit{cwd="<REDACTED_PATH>"}
+
+User 2026-04-26 23:48:15 CDT
+Ok, there seems to be an issue on the highlight flag.
+The LLM should not be determining if an item is highlighted. That should be up to the deterministic readers.
+And if the deterministic readers are currently finding highlights in any of the current receipts in the inbox, then something is wrong because there are not any highlights. Please investigate and fix this.

@@ -6,6 +6,7 @@ from receipt_processor.extraction.ocr_router import DocumentExtraction
 from receipt_processor.llm.client_base import LLMExtractionResponse, LLMProviderError, LLMUsage
 from receipt_processor.llm.config import LLMInputMode, LLMSettings
 from receipt_processor.llm.orchestrator import extract_with_optional_llm
+from receipt_processor.processing.expense_processor import process_structured_data
 
 
 def _base_extracted(filename: str = "receipt.png") -> dict[str, object]:
@@ -211,6 +212,75 @@ def test_llm_enabled_success_uses_llm_output(tmp_path: Path) -> None:
     assert client.text_calls == 1
     assert client.file_calls == 0
     assert result.warning_event is None
+
+
+def test_llm_highlight_flags_are_ignored_when_deterministic_highlight_unavailable(tmp_path: Path) -> None:
+    receipt = tmp_path / "receipt.png"
+    receipt.write_bytes(b"png")
+    document = DocumentExtraction(raw_text="Merchant LLM Cafe\nAmount Paid 12.34", ocr_lines=[], highlight_detection_available=False)
+    deterministic = _base_extracted(receipt.name)
+    client = _SuccessfulClient(
+        {
+            "merchant_name": "LLM Cafe",
+            "amount_paid": 12.34,
+            "line_items": [
+                {"name": "Meal", "amount": 11.00, "is_highlighted": True},
+                {"name": "Tax", "amount": 1.34, "is_highlighted": True},
+            ],
+        }
+    )
+    settings = LLMSettings(enabled=True, api_key="test-key", model="gpt-test", input_mode=LLMInputMode.text)
+
+    result = extract_with_optional_llm(
+        receipt_path=receipt,
+        document=document,
+        deterministic_extracted=deterministic,
+        settings=settings,
+        client=client,
+    )
+    processed = process_structured_data(result.extracted)
+
+    assert result.extraction_mode == "llm"
+    assert all(not bool(item.get("is_highlighted")) for item in result.extracted["line_items"])
+    assert processed["noncontributing_items_count"] == 0
+
+
+def test_llm_line_item_highlights_follow_deterministic_source_when_available(tmp_path: Path) -> None:
+    receipt = tmp_path / "receipt.png"
+    receipt.write_bytes(b"png")
+    document = DocumentExtraction(raw_text="Sample text", ocr_lines=[], highlight_detection_available=True)
+    deterministic = _base_extracted(receipt.name)
+    deterministic["highlight_detection_available"] = True
+    deterministic["line_items"] = [
+        {"name": "Meal", "amount": 10.00, "is_highlighted": True, "source": "ocr"},
+        {"name": "Tax", "amount": 0.80, "is_highlighted": False, "source": "ocr"},
+    ]
+    client = _SuccessfulClient(
+        {
+            "merchant_name": "LLM Cafe",
+            "amount_paid": 10.80,
+            "line_items": [
+                {"name": "Meal", "amount": 10.00, "is_highlighted": False},
+                {"name": "Tax", "amount": 0.80, "is_highlighted": False},
+            ],
+        }
+    )
+    settings = LLMSettings(enabled=True, api_key="test-key", model="gpt-test", input_mode=LLMInputMode.text)
+
+    result = extract_with_optional_llm(
+        receipt_path=receipt,
+        document=document,
+        deterministic_extracted=deterministic,
+        settings=settings,
+        client=client,
+    )
+    processed = process_structured_data(result.extracted)
+
+    assert result.extraction_mode == "llm"
+    assert result.extracted["line_items"][0]["is_highlighted"] is True
+    assert result.extracted["line_items"][1]["is_highlighted"] is False
+    assert processed["contributing_items_count"] == 1
+    assert processed["noncontributing_items_count"] == 1
 
 
 def test_llm_enabled_missing_key_falls_back(tmp_path: Path) -> None:
