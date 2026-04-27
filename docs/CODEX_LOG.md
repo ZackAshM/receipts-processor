@@ -2481,3 +2481,62 @@ Validation
 
 User 2026-04-27 01:02:09 CDT
 Ah, one change - just put the setup script in the root folder
+
+Codex 2026-04-27 01:05:05 CDT
+Done. I moved the setup script to the repo root and updated the README command.
+
+Changes:
+- Added root script: [setup_project.py](<REDACTED_PATH>)
+- Updated command in [README.md](<REDACTED_PATH>) to:
+  - `python setup_project.py`
+
+Validation:
+- `PYTHONPATH=src .venv/bin/python -m py_compile setup_project.py` passed.
+
+User 2026-04-27 01:05:05 CDT
+Ok, now let's do a project review to ensure the README is accurate. I want to reorganize the README as follows:
+
+The overview (my goal and intent for the project and what it is) will stay at the top.
+Then next should be user installation and usage guides. 
+Divider
+All of the details sections can go here now. Update it so it's not overly detailed, just what's relevant or the most important parts.
+Update the "what I directed" to encapsulate the work that I've done in directing this project.
+You can probably remove the "Product Management Evidence" section.
+Keep Attribution model at the bottom.
+
+Codex 2026-04-27 01:12:23 CDT
+Reorganized and updated the README to match your requested structure.
+
+Updated file:
+- [README.md](<REDACTED_PATH>)
+
+What changed:
+- Kept your overview/intent at the top.
+- Moved installation and usage guides right after overview.
+- Added a clear divider (`---`) before project details.
+- Condensed detail sections to the most relevant items.
+- Rewrote **What I Directed** to better encapsulate your leadership across product, governance, security, and operations.
+- Removed **Product Management Evidence** section.
+- Kept **Attribution Model** at the bottom.
+
+If you want, next I can do one more pass purely for tone polish (more portfolio-style concise language) without changing structure.
+
+User 2026-04-27 01:12:23 CDT
+Ok, I made some edits myself. Can you update the installation to start with
+
+Clone this repository:
+```bash
+clone command
+cd command
+```
+
+Codex 2026-04-27 01:20:58 CDT
+Done. I updated the Installation section in [README.md](<REDACTED_PATH>) to start with:
+
+```bash
+clone command
+cd command
+```
+
+User 2026-04-27 01:20:58 CDT
+I did not mean that literally. You should be able to fill in what those commands are. The repo origin is where a user would be cloning from

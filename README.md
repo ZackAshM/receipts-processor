@@ -1,220 +1,134 @@
 # ReceiptProcessor
 
-I used Codex to build ReceiptProcessor from scratch as an AI product management showcase. I defined the product goals, architecture direction, collaboration rules, and governance constraints while using Codex as an execution partner.
+I used Codex to build ReceiptProcessor from scratch as an AI product project. I defined the product goals, architecture direction, collaboration rules, and governance constraints while using Codex as an execution partner.
 
-## Product Goal
+This is my first project of this sort, so I am using it as an educational opportunity to learn/understand workflow creation and management of AI application in industry-grade software development.
+
+## Project Overview
 
 I am building a receipt-to-expense pipeline that:
-- Scans a target folder for receipt files (`.pdf`, `.jpeg`, `.jpg`, `.png`).
-- Extracts expense data from mixed receipt types (paper scans, screenshots, printed emails).
-- Uses filename hints when receipt content is incomplete.
-- Produces `Expenses.xlsx` or `Expenses.csv` matching a provided model template.
+- Scans a folder for receipt files (`.pdf`, `.jpeg`, `.jpg`, `.png`).
+- Extracts expense information from mixed receipt formats.
+- Includes filename and optional `notes.txt` or bank/credit statement files to include as additional context in data extraction.
+- Produces `Expenses.csv` or `Expenses.xlsx` based on a customizable model template contract.
 
-## Current Capabilities
+## Installation & Setup
 
-- PDF text extraction via `pypdf`.
-- Image OCR via `pytesseract` + `Pillow`.
-- Rule-based extraction for date, vendor, and total amount.
-- Filename-based fallback inference for date/amount/vendor.
-- Optional notes context via `notes.txt` or receipt-specific `*_notes.txt`.
-- Deterministic structured extraction layer (document metadata, totals, itemization, keyword evidence).
-- Deterministic processing layer (for derived fields like `true_expense`, `receipt_expense`, and `receipt_amount_if_different`).
-- Canonical transaction types constrained to `Food`, `Transportation`, `Lodging`, `Misc`.
-- Optional LLM semantic extraction layer (enabled by default, with deterministic fallback on any failure).
-- Model-driven template rendering via placeholders (`{{keyword}}`) and run-level operations (`<operation>`).
-- Model/example-driven output shaping (for date/currency formatting hints).
-- Automatic summary row generation (`Total:`) aligned to template columns.
-- Spreadsheet formula-injection sanitization for exported cell values.
-- Null-result and contradiction flagging with sidecar exception export (`*_exceptions.csv`).
-- Low-confidence routing enforced via `configs/risk_controls.yaml` thresholds.
-- Structured runtime logs for performance/debugging (`logs/performance-YYYY-MM-DD.jsonl`).
-- Optional log privacy mode to mask sensitive file-level identifiers in runtime telemetry.
+Clone this repository:
 
-## What I Directed
+```bash
+git clone https://github.com/ZackAshM/receipts-processor.git
+cd receipts-processor
+```
 
-I directed these core requirements:
-- Human approval gate: Codex must explain understanding and planned changes before acting.
-- Explicit credit model: documentation must clearly reflect my product leadership.
-- Portfolio-grade structure: code, docs, tests, governance, and operations are separated professionally.
-- Agentic controls: guardrails, risk management, and failure handling are documented for Codex operation.
+### Option A: One-step interactive setup (recommended)
 
-## Current Repository Layout
+```bash
+python setup_project.py
+```
 
-- `src/receipt_processor/`: product code and pipeline modules.
-- `configs/`: runtime risk controls plus reserved/reference config stubs.
-- `models/`: model and example templates defining the output contract.
-- `data/`: input, processed, and output file locations.
-- `agent/`: Codex governance (charter, guardrails, risk, failures, approval policy).
-- `docs/`: product management artifacts and change/log records.
-- `tests/`: starter tests for pipeline building blocks.
+This script:
+- creates `.venv` if needed,
+- installs dependencies and the package,
+- creates/updates `.env`,
+- asks if you want LLM support enabled,
+- checks for `tkinter` and warns if GUI support may be unavailable.
 
-## Quick Start
+### Option B: Manual setup
 
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.lock.txt
 pip install -e .
-receipts_processor data/inbox \
-  --model-file models/model.csv \
-  --example-file models/example.csv \
-  --output-type csv \
-  --log-dir logs \
-  --risk-controls-file configs/risk_controls.yaml
 ```
 
-If LLM is disabled, unavailable, misconfigured, or fails at runtime, the app continues in deterministic mode.
+## Usage Guide
 
-## First-Time Setup Script
-
-For a fresh clone, you can run one interactive setup script:
-
-```bash
-python setup_project.py
-```
-
-The script will:
-- create `.venv` (if needed),
-- install dependencies and the app,
-- create/update `.env`,
-- ask whether to enable LLM support (and only ask LLM follow-up questions if enabled),
-- check for `tkinter` support and warn if GUI support may be unavailable.
-
-## Usage Guide (For End Users)
-
-### 1) Prepare your receipts folder
+### 1) Prepare your receipts folder (default path: `data/inbox/`)
 
 - Supported files: `.pdf`, `.jpeg`, `.jpg`, `.png`
-- You can place receipts in either:
-  - the default folder: `data/inbox/`, or
-  - any custom folder path (inside or outside this repo)
-- Optional context files:
-  - `notes.txt` (global notes for all receipts in that folder)
-  - `<receipt_name>_notes.txt` (receipt-specific notes)
+- Optional context files in the same folder:
+  - `notes.txt` (global context)
+  - `<receipt_name>_notes.txt` (receipt-specific context)
 
-### 2) Run the app
+### 2) Run from CLI
 
-Available CLI command names:
-- `receipts_processor` (recommended)
-- `receipt_processor` (alias)
-- `receipt-processor` (alias)
-- `receipts_processor_gui` (desktop GUI)
-
-Use the default project folders:
+Default run:
 
 ```bash
-receipts_processor data/inbox \
-  --model-file models/model.csv \
-  --example-file models/example.csv \
-  --output-type csv \
-  --log-dir logs \
-  --risk-controls-file configs/risk_controls.yaml
+receipts_processor data/inbox
 ```
 
-Use a custom receipts folder:
+Custom run:
 
 ```bash
 receipts_processor /path/to/my-receipts \
   --model-file models/model.csv \
   --example-file models/example.csv \
-  --output-type xlsx \
-  --log-dir logs \
-  --risk-controls-file configs/risk_controls.yaml
+  --output-type xlsx
 ```
 
-If `--output-file` is omitted, the default is:
-- `<INPUT_DIR>/Expenses.<output-type>`
-- `--output-type` defaults to `csv`
+Notes:
+- If `--output-file` is omitted, output defaults to `<INPUT_DIR>/Expenses.<output-type>`.
+- `--output-type` defaults to `csv`.
 
-If `--output-file` has no extension, the app appends `.<output-type>`.
-
-### 2b) GUI usage (optional)
-
-Run:
+### 3) Run GUI (optional)
 
 ```bash
 receipts_processor_gui
 ```
 
-If `_tkinter` import fails, install Tk support for your Python:
-- Ubuntu/Debian: `sudo apt-get install python3-tk`
-- Fedora: `sudo dnf install python3-tkinter`
-- macOS (Homebrew): `brew install python-tk` (or `brew install tcl-tk`)
-- If all else fails: install Python with tkinter supported from [python.org](https://www.python.org/downloads/) and recreate your venv
+If `tkinter` is missing, CLI still works. Install Tk support for your Python build to use the GUI.
 
-### 2c) Optional LLM extraction
+### 4) Optional LLM extraction
 
-LLM support is optional. The app works without it. This branch uses OpenRouter for LLM routing.
-
-1. Create a local `.env` from `.env.example`:
-
-```bash
-cp .env.example .env
-```
-
-2. Edit `.env` and set:
-- `ENABLE_LLM=true`
-- `ENABLE_LLM_EXCEPTION_ASSIST=true|false` (default `true`)
-- `OPENROUTER_API_KEY=<your private token>`
+The app works without LLM. To enable LLM behavior, set these in `.env`:
+- `ENABLE_LLM=true|false`
+- `OPENROUTER_API_KEY=<your token>`
 - `OPENROUTER_MODEL=<model slug>` (default `openrouter/free`)
-- `LLM_INPUT_MODE=text|file|auto` (default `text`)
-- `LLM_MAX_FILE_BYTES=<max direct-file bytes for LLM file mode>` (default `5000000`)
 
-3. Run normally. The CLI/GUI automatically load `.env` from the current working directory.
-   Exported shell variables still take precedence over `.env` values.
+Per-run overrides are available in CLI flags and GUI Advanced options.
 
-4. Optional per-run overrides:
-- CLI flags:
-  - `--enable-llm` / `--disable-llm`
-  - `--enable-llm-exception-assist` / `--disable-llm-exception-assist`
-  - `--llm-model <model-slug>`
-  - `--llm-input-mode <auto|file|text>`
-- GUI Advanced options:
-  - `LLM Enable Override` (`env`, `enable`, `disable`)
-  - `LLM Exception Assist Override` (`env`, `enable`, `disable`)
-  - `LLM Model Override`
-  - `LLM Input Mode Override` (`env`, `auto`, `file`, `text`)
+### 5) Outputs
 
-Input modes:
-- `text` (default): extract text locally first (with OCR fallback checks) and send text to LLM.
-- `file`: force direct file input first, then fallback to OCR/local text input if the model/provider cannot use that file mode.
-- `auto`: attempt direct file input for image/PDF receipts, then fallback to OCR/local text input if needed.
+- Main export: `Expenses.csv` or `Expenses.xlsx`
+- Exceptions sidecar: `Expenses_exceptions.csv`
+- Detailed sidecar: `Expenses_detailed.json`
+- Readable summary sidecar: `Expenses_summary.md`
+- Runtime logs: `logs/performance-YYYY-MM-DD.jsonl`
 
-LLM extraction context includes:
-- receipt filename
-- receipt file or extracted text
-- matched notes context (`notes.txt`, `<receipt>_notes.txt`, etc.)
-- sanitized statement context from bank/credit statement-like files in the same input folder
+---
 
-If LLM is misconfigured/unavailable/fails, the app automatically falls back to deterministic extraction and continues output generation.
+## What I Directed
 
-Optional exception assist behavior:
-- When enabled, the LLM gets a first conservative attempt to resolve obvious contradiction/low-confidence choices from provided options.
-- If the LLM returns `abstain` (not obvious) or invalid/ambiguous option output, the pipeline reports the assist fallback and routes to user review.
-- If LLM extraction for a receipt already failed due provider/API instability, exception assist is skipped for that receipt to avoid duplicate failing calls.
-- Number-based review choices are always routed to user review (LLM exception assist does not auto-resolve numeric options).
-- The run never hard-depends on exception assist; existing review and exception flows remain authoritative.
-- At run start, CLI/GUI report whether the run is deterministic or LLM-supported, plus model/flag summary.
-- Progress is surfaced per receipt as `<filename> [x% / 100%]`.
-- A run-level LLM circuit breaker opens after repeated provider failures and automatically continues the rest of the run in deterministic mode.
+I directed the project across product, architecture, security, and operations:
+- Defined the product contract: template-driven outputs (`{{keywords}}`, `<operations>`) and model-first flexibility.
+- Enforced governance: human approval flow, explicit attribution, and append-only Codex interaction logging.
+- Set extraction strategy: deterministic-first reliability with optional LLM semantic extraction and strict fallback behavior.
+- Required review controls: contradiction/null handling with user-in-the-loop resolution for critical values.
+- Required security guardrails: redaction policy, sensitive-context controls, spreadsheet injection protections, and safer logging practices.
+- Directed operational maturity: CI/security checks, dependency auditing, and reproducible setup guidance.
+- Prioritized onboarding UX: clone-to-run startup script and clear user instructions for CLI and GUI.
 
-### 3) Review outputs
+## Key Capabilities
 
-- Main export: `Expenses.csv` (or `.xlsx` if you choose that extension)
-- Flagged records: `Expenses_exceptions.csv`
-- Detailed extraction + processing sidecar: `Expenses_detailed.json`
-- User-friendly detailed summary sidecar: `Expenses_summary.md`
-- Runtime performance/debug logs: `logs/performance-YYYY-MM-DD.jsonl`
+- Deterministic extraction from OCR/PDF text, filename hints, and notes context.
+- Optional OpenRouter-backed LLM extraction with graceful deterministic fallback.
+- Structured extraction and processing pipeline for derived expense values.
+- Template renderer that fills model-defined keywords/operations.
+- Exception routing and review flow for contradictions, low confidence, and null results.
+- Runtime observability with structured logs and sidecar outputs.
 
-## Product Management Evidence
+## Repository Layout
 
-I use the following files to show product ownership and decision quality:
-- `docs/PRD.md`
-- `docs/ARCHITECTURE.md`
-- `docs/DECISIONS.md`
-- `docs/CHANGELOG.md`
-- `docs/CODEX_LOG.md`
-- `agent/HUMAN_APPROVAL_POLICY.md`
+- `src/receipt_processor/`: core application code
+- `models/`: model and example templates
+- `configs/`: runtime control files
+- `data/`: inbox/output folders
+- `tests/`: automated tests
+- `docs/`: product, architecture, and decision history
+- `agent/`: Codex governance and guardrail docs
 
 ## Attribution Model
 
