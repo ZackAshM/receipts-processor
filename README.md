@@ -4,6 +4,8 @@ I used Codex to build ReceiptProcessor from scratch as an AI product project. I 
 
 This is my first project of this sort, so I am using it as an educational opportunity to learn/understand workflow creation and management of AI application in industry-grade software development.
 
+Disclaimer: This is not guaranteed to perform perfectly for all receipts. Do your due diligence and check the totals. This app just makes it faster to itemize.
+
 ## Project Overview
 
 I am building a receipt-to-expense pipeline that:
