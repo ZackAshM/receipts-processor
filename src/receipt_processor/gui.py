@@ -7,6 +7,7 @@ import threading
 from pathlib import Path
 from typing import Any
 
+from receipt_processor.config.env_loader import load_local_dotenv
 from receipt_processor.interface_options import OutputType, resolve_output_file
 from receipt_processor.pipeline import run_pipeline
 from receipt_processor.review.models import (
@@ -58,6 +59,10 @@ class ReceiptProcessorGUI:
         self.output_type_var = tk.StringVar(value=OutputType.csv.value)
         self.log_dir_var = tk.StringVar(value="logs")
         self.risk_controls_var = tk.StringVar(value="")
+        self.llm_enable_override_var = tk.StringVar(value="env")
+        self.llm_model_override_var = tk.StringVar(value="")
+        self.llm_input_mode_override_var = tk.StringVar(value="env")
+        self.llm_exception_assist_override_var = tk.StringVar(value="env")
 
         self.advanced_open = False
         self.run_button: Any
@@ -181,6 +186,50 @@ class ReceiptProcessorGUI:
         ttk.Button(frame, text="Browse", command=self._pick_risk_controls_file).grid(
             row=row, column=2, sticky="ew", pady=(8, 0)
         )
+        row += 1
+
+        ttk.Label(frame, text="LLM Enable Override").grid(
+            row=row, column=0, sticky="w", pady=(8, 0)
+        )
+        ttk.Combobox(
+            frame,
+            textvariable=self.llm_enable_override_var,
+            values=["env", "enable", "disable"],
+            state="readonly",
+            width=20,
+        ).grid(row=row, column=1, sticky="w", padx=(8, 8), pady=(8, 0))
+        row += 1
+
+        ttk.Label(frame, text="LLM Model Override").grid(
+            row=row, column=0, sticky="w", pady=(8, 0)
+        )
+        ttk.Entry(frame, textvariable=self.llm_model_override_var, width=62).grid(
+            row=row, column=1, sticky="ew", padx=(8, 8), pady=(8, 0)
+        )
+        row += 1
+
+        ttk.Label(frame, text="LLM Input Mode Override").grid(
+            row=row, column=0, sticky="w", pady=(8, 0)
+        )
+        ttk.Combobox(
+            frame,
+            textvariable=self.llm_input_mode_override_var,
+            values=["env", "auto", "file", "text"],
+            state="readonly",
+            width=20,
+        ).grid(row=row, column=1, sticky="w", padx=(8, 8), pady=(8, 0))
+        row += 1
+
+        ttk.Label(frame, text="LLM Exception Assist Override").grid(
+            row=row, column=0, sticky="w", pady=(8, 0)
+        )
+        ttk.Combobox(
+            frame,
+            textvariable=self.llm_exception_assist_override_var,
+            values=["env", "enable", "disable"],
+            state="readonly",
+            width=20,
+        ).grid(row=row, column=1, sticky="w", padx=(8, 8), pady=(8, 0))
 
         frame.columnconfigure(1, weight=1)
 
@@ -243,6 +292,28 @@ class ReceiptProcessorGUI:
             return OutputType.xlsx
         return OutputType.csv
 
+    def _resolve_llm_enable_override(self) -> bool | None:
+        raw = self.llm_enable_override_var.get().strip().lower()
+        if raw == "enable":
+            return True
+        if raw == "disable":
+            return False
+        return None
+
+    def _resolve_llm_input_mode_override(self) -> str | None:
+        raw = self.llm_input_mode_override_var.get().strip().lower()
+        if raw in {"text", "file", "auto"}:
+            return raw
+        return None
+
+    def _resolve_llm_exception_assist_override(self) -> bool | None:
+        raw = self.llm_exception_assist_override_var.get().strip().lower()
+        if raw == "enable":
+            return True
+        if raw == "disable":
+            return False
+        return None
+
     def _log_status(self, message: str) -> None:
         self.status_text.configure(state="normal")
         self.status_text.insert("end", f"{message}\n")
@@ -252,8 +323,62 @@ class ReceiptProcessorGUI:
     def _handle_pipeline_warning(self, event: dict[str, object]) -> None:
         self.root.after(0, self._on_pipeline_warning, dict(event))
 
+    def _handle_pipeline_status(self, event: dict[str, object]) -> None:
+        self.root.after(0, self._on_pipeline_status, dict(event))
+
+    def _handle_pipeline_progress(self, event: dict[str, object]) -> None:
+        self.root.after(0, self._on_pipeline_progress, dict(event))
+
+    def _on_pipeline_status(self, event: dict[str, object]) -> None:
+        if str(event.get("event_type", "")).strip() != "run_mode":
+            return
+        llm_mode = str(event.get("llm_mode", "")).strip()
+        if llm_mode != "llm_supported":
+            self._log_status("Run mode: deterministic extraction (LLM disabled).")
+            return
+        llm_model_name = str(event.get("llm_model", "")).strip() or "unknown_model"
+        llm_input_mode_name = str(event.get("llm_input_mode", "")).strip() or "auto"
+        exception_assist_enabled = bool(event.get("llm_exception_assist", False))
+        self._log_status(
+            (
+                "Run mode: LLM-supported extraction "
+                f"(model={llm_model_name}, input_mode={llm_input_mode_name}, "
+                f"exception_assist={'enabled' if exception_assist_enabled else 'disabled'})."
+            )
+        )
+
+    def _on_pipeline_progress(self, event: dict[str, object]) -> None:
+        if str(event.get("event_type", "")).strip() != "progress":
+            return
+        filename = str(event.get("filename", "unknown")).strip() or "unknown"
+        percent = int(event.get("percent", 0))
+        self._log_status(f"{filename} [{percent}% / 100%]")
+
     def _on_pipeline_warning(self, event: dict[str, object]) -> None:
-        if event.get("warning_type") != "non_blocking_contradictions":
+        warning_type = str(event.get("warning_type", "")).strip()
+        if warning_type == "llm_fallback":
+            source_file = str(event.get("source_file", "unknown"))
+            details = str(event.get("details", "")).strip() or "unknown_reason"
+            self._log_status(
+                f"Warning ({source_file}): LLM extraction failed; deterministic fallback used ({details})."
+            )
+            return
+        if warning_type == "llm_exception_assist_fallback":
+            source_file = str(event.get("source_file", "unknown"))
+            issue_type = str(event.get("issue_type", "unknown_issue")).strip() or "unknown_issue"
+            details = str(event.get("details", "")).strip() or "not_obvious"
+            self._log_status(
+                (
+                    f"Info ({source_file}): LLM exception assist abstained for {issue_type} "
+                    f"({details}); falling back to user review."
+                )
+            )
+            return
+        if warning_type == "llm_circuit_breaker_opened":
+            details = str(event.get("details", "")).strip() or "provider instability"
+            self._log_status(f"Warning: LLM circuit breaker opened ({details})")
+            return
+        if warning_type != "non_blocking_contradictions":
             return
         source_file = str(event.get("source_file", "unknown"))
         details = event.get("details")
@@ -444,13 +569,28 @@ class ReceiptProcessorGUI:
         log_dir = Path(log_dir_text) if log_dir_text else None
         risk_controls_text = self.risk_controls_var.get().strip()
         risk_controls = Path(risk_controls_text) if risk_controls_text else None
+        llm_enable_override = self._resolve_llm_enable_override()
+        llm_model_override = self.llm_model_override_var.get().strip() or None
+        llm_input_mode_override = self._resolve_llm_input_mode_override()
+        llm_exception_assist_override = self._resolve_llm_exception_assist_override()
 
         self.run_button.configure(state="disabled")
         self._log_status(f"Running extraction for: {input_dir}")
 
         thread = threading.Thread(
             target=self._run_pipeline_thread,
-            args=(input_dir, model_file, example_file, resolved_output, log_dir, risk_controls),
+            args=(
+                input_dir,
+                model_file,
+                example_file,
+                resolved_output,
+                log_dir,
+                risk_controls,
+                llm_enable_override,
+                llm_model_override,
+                llm_input_mode_override,
+                llm_exception_assist_override,
+            ),
             daemon=True,
         )
         thread.start()
@@ -463,6 +603,10 @@ class ReceiptProcessorGUI:
         output_file: Path,
         log_dir: Path | None,
         risk_controls_file: Path | None,
+        enable_llm: bool | None,
+        llm_model: str | None,
+        llm_input_mode: str | None,
+        llm_exception_assist: bool | None,
     ) -> None:
         try:
             run_pipeline(
@@ -472,8 +616,14 @@ class ReceiptProcessorGUI:
                 output_file=output_file,
                 log_dir=log_dir,
                 risk_controls_file=risk_controls_file,
+                enable_llm=enable_llm,
+                llm_model=llm_model,
+                llm_input_mode=llm_input_mode,
+                llm_exception_assist=llm_exception_assist,
                 review_handler=self._create_gui_review_handler(),
                 warning_handler=self._handle_pipeline_warning,
+                status_handler=self._handle_pipeline_status,
+                progress_handler=self._handle_pipeline_progress,
             )
             self.root.after(0, self._on_run_success, output_file)
         except RunCancelledError:
@@ -497,6 +647,7 @@ class ReceiptProcessorGUI:
 
 def main() -> None:
     """Launch the desktop GUI."""
+    load_local_dotenv(override=False)
     tk, _, _, _ = _load_tk_modules()
     root = tk.Tk()
     ReceiptProcessorGUI(root)

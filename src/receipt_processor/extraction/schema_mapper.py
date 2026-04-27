@@ -5,6 +5,7 @@ from __future__ import annotations
 import re
 from datetime import datetime
 
+from receipt_processor.extraction.transaction_type import normalize_transaction_type
 from receipt_processor.io.template_loader import TemplateHints
 
 DATE_INPUT_FORMATS = ("%Y-%m-%d", "%Y/%m/%d", "%m/%d/%Y", "%m-%d-%Y")
@@ -69,7 +70,7 @@ def map_to_model_columns(
         model_columns, ("receipt amt", "receipt amount")
     )
 
-    expense_type = parsed_fields.get("expense_type", "").strip() or "Other"
+    expense_type = normalize_transaction_type(parsed_fields.get("expense_type", "").strip())
     vendor = parsed_fields.get("vendor", "").strip()
     description = parsed_fields.get("description", "").strip()
     if not description and vendor:

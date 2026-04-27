@@ -5,6 +5,8 @@ from __future__ import annotations
 import json
 from typing import Any
 
+from receipt_processor.extraction.transaction_type import normalize_transaction_type
+
 
 def _round_money(value: float | int | None) -> float | None:
     if value is None:
@@ -68,7 +70,10 @@ def process_structured_data(extracted: dict[str, Any]) -> dict[str, Any]:
     if abs(true_expense - receipt_expense) > 0.009:
         receipt_amount_if_different = receipt_expense
 
-    transaction_type = str(extracted.get("transaction_type", "")).strip() or "Other"
+    transaction_type = normalize_transaction_type(
+        str(extracted.get("transaction_type", "")).strip(),
+        context_text=str(extracted.get("merchant_name", "")).strip(),
+    )
     merchant_name = str(extracted.get("merchant_name", "")).strip()
     description = f"{transaction_type} - {merchant_name}".strip(" -")
 

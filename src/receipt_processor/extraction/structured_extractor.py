@@ -8,6 +8,7 @@ from typing import Any
 
 from receipt_processor.extraction.ocr_router import DocumentExtraction
 from receipt_processor.extraction.receipt_parser import parse_receipt_text
+from receipt_processor.extraction.transaction_type import normalize_transaction_type
 
 AMOUNT_AT_END_RE = re.compile(r"^(?P<name>.+?)\s+(?P<amount>\$?\d+(?:[.,]\d{2}))\s*$")
 
@@ -205,7 +206,12 @@ def extract_structured_data(receipt_path: Path, document: DocumentExtraction) ->
 
     merchant_name = parsed.get("vendor", "")
     transaction_date = parsed.get("date", "")
-    transaction_type = parsed.get("expense_type", "")
+    parsed_type = str(parsed.get("expense_type", "")).strip()
+    transaction_type = normalize_transaction_type(
+        parsed_type,
+        context_text=f"{merchant_name} {raw_text}",
+        default="",
+    )
 
     confidence = _confidence_from_core_fields(merchant_name, transaction_date, amount_paid)
     needs_review = confidence < 0.7 or (not line_items and amount_paid is None)

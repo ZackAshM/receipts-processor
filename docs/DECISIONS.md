@@ -119,3 +119,51 @@
 - Requested by: User
 - Implemented by: Codex
 - Rationale: Chat logs must not contain sensitive absolute paths, and CI should fail when unredacted absolute paths are detected.
+
+## D-0021: Optional LLM Semantic Extraction With Deterministic Fallback
+- Status: Accepted
+- Requested by: User
+- Implemented by: Codex
+- Rationale: LLM support should improve semantic field extraction when available, while keeping deterministic extraction as the reliable baseline whenever LLM is disabled, misconfigured, unavailable, or returns invalid output.
+
+## D-0022: OpenRouter-First LLM Provider Strategy
+- Status: Accepted
+- Requested by: User
+- Implemented by: Codex
+- Rationale: LLM integration should use OpenRouter as the provider abstraction layer, with capability-aware direct file input (image/PDF) and automatic OCR/text fallback for resilience.
+
+## D-0023: Runtime LLM Override Controls in CLI and GUI
+- Status: Accepted
+- Requested by: User
+- Implemented by: Codex
+- Rationale: Environment variables should remain default configuration, while operators can override key LLM controls (`enable_llm`, `llm_model`, `llm_input_mode`) at runtime without re-sourcing environment files.
+
+## D-0024: Automatic Local .env Loading for CLI/GUI
+- Status: Accepted
+- Requested by: User
+- Implemented by: Codex
+- Rationale: Reduce operator friction by auto-loading `.env` defaults at startup while preserving safety via non-overwrite behavior for already-exported environment variables.
+
+## D-0025: Canonical Transaction-Type Contract and Context-Rich LLM Inputs
+- Status: Accepted
+- Requested by: User
+- Implemented by: Codex
+- Rationale: Improve semantic extraction quality by constraining `transaction_type` to a fixed set (`Food`, `Transportation`, `Lodging`, `Misc`) and supplying broader evidence to the LLM (filename, notes, and relevant statement excerpts) with prompt guidance aligned to app intent.
+
+## D-0026: Optional Conservative LLM-First Exception Assist
+- Status: Accepted
+- Requested by: User
+- Implemented by: Codex
+- Rationale: Allow the LLM to attempt obvious contradiction/low-confidence resolution first using explicit option selection, while keeping ambiguous cases routed to user review and existing exception handling.
+
+## D-0027: Exception-Assist Abstain Fallback and Run Visibility
+- Status: Accepted
+- Requested by: User
+- Implemented by: Codex
+- Rationale: LLM exception assist should not use a fixed numeric confidence gate; when enabled it should attempt first, abstain when not obvious, and explicitly report fallback to user review. Runs should also surface startup mode/flags and per-file progress for operator visibility.
+
+## D-0028: LLM Stability Hardening for Test-Phase OpenRouter Models
+- Status: Accepted
+- Requested by: User
+- Implemented by: Codex
+- Rationale: While keeping `openrouter/free` for testing, runtime should reduce failure churn via transient retries, run-level circuit-breaker fallback, response-shape parsing hardening, and skipping duplicate exception-assist calls when extraction already failed for provider reasons.

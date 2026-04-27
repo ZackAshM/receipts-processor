@@ -5,6 +5,8 @@ from __future__ import annotations
 import re
 from datetime import datetime
 
+from receipt_processor.extraction.transaction_type import normalize_transaction_type
+
 AMOUNT_RE = re.compile(r"(?:USD|\$)?\s*(\d{1,3}(?:,\d{3})*(?:\.\d{2})|\d+\.\d{2})")
 
 DATE_PATTERNS = [
@@ -142,30 +144,7 @@ def _extract_vendor(lines: list[str]) -> str:
 
 
 def _infer_expense_type(vendor: str, raw_text: str) -> str:
-    haystack = f"{vendor} {raw_text}".lower()
-    if any(key in haystack for key in ("uber", "lyft", "taxi", "flight", "airline", "train", "hotel")):
-        return "Transportation"
-    if any(
-        key in haystack
-        for key in (
-            "coffee",
-            "restaurant",
-            "cafe",
-            "grill",
-            "pizza",
-            "food",
-            "bar",
-            "taqueria",
-            "chilis",
-            "burger",
-            "bakery",
-            "sandwich",
-        )
-    ):
-        return "Food"
-    if any(key in haystack for key in ("office", "staples", "supplies", "stationery")):
-        return "Office Supplies"
-    return "Other"
+    return normalize_transaction_type("", context_text=f"{vendor} {raw_text}", default="")
 
 
 def parse_receipt_text(raw_text: str) -> dict[str, str]:

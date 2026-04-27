@@ -1710,3 +1710,401 @@ Tests:
 Logging policy:
 - Updated `docs/CODEX_LOG.md` with one-response-lag append behavior.
 - Used redacted path placeholders (`[REDACTED_PATH]`) for sensitive local paths.
+
+User 2026-04-26 18:06:00 CDT
+Ok, can you create a script that will do the redaction that you do in CODEX_LOG.md, which we can run after every update to the file? Let it take number of lines as an argument. Once you create it, we'll run it for the whole file, and then for subsequent runs, we'll run it over only the last 2000 lines (after every update you do).
+This redaction script should do all the things that the redaction policy covers, in terms of removing security risks (secrets, api tokens, absolute paths, passwords, etc.).
+
+Codex 2026-04-26 18:10:00 CDT
+Implemented. I added a reusable redaction script and ran it on the full chat log.
+
+What I changed:
+1. Added script: [scripts/redact_codex_log.py]([REDACTED_PATH])
+- Redacts absolute paths, API keys/tokens/secrets, password assignments, private-key PEM blocks, and email addresses.
+
+2. Added runbook usage notes: [docs/OPERATIONS.md]([REDACTED_PATH])
+
+3. Updated prior-turn log entry in: [docs/CODEX_LOG.md]([REDACTED_PATH])
+
+Commands:
+- Full file: `./.venv/bin/python scripts/redact_codex_log.py --lines 999999`
+- Incremental: `./.venv/bin/python scripts/redact_codex_log.py --lines 2000`
+
+Already run:
+- Full-file pass on `docs/CODEX_LOG.md` succeeded.
+- Sanity test on sample content confirmed active redaction for paths, tokens, password, email, and JWT-like content.
+
+User 2026-04-26 18:12:00 CDT
+All right, it is now time to go to the next level. I've created a new branch "implement-llm", where we will now implement LLM support into this app.
+
+The LLM feature must be an optional capability. The existing deterministic app must continue to work when the LLM is disabled, unavailable, misconfigured, or failing.
+
+The implementation should follow these guidelines:
+
+Configuration
+- Add environment-based configuration.
+- Use `ENABLE_LLM=false` by default.
+- Use `OPENAI_API_KEY=REPLACE_WITH_YOUR_TOKEN` as the placeholder in .env.example only.
+- Use `OPENAI_MODEL` as a configurable model name.
+- Use `LLM_INPUT_MODE` with allowed values: text, file, auto.
+    - text: extract text locally first, then send text to the LLM. (Default)
+    - file: send supported file/image input directly to LLM.
+- Never track a real .env or .venv file with the token.
+- Add or update .env.example with the required variables (and placeholders when necessary).
+
+Architecture
+- Do not scatter API calls throughout the app.
+- The LLM integration should be professionally organized and implemented as expected from similar apps.
+- The LLM integration should use a client wrapper to allow different API implementation.
+- The rest of the app should interact with the LLM only through a clean extraction interface.
+- The LLM is not a user-facing chat feature. It only runs in the background as part of file/data extraction.
+
+LLM responsibility
+- The LLM is used only for semantic data extraction.
+- The LLM should identify fields and candidate values based on document meaning, not just exact keywords.
+- The LLM must not perform final arithmetic or final business-rule decisions.
+- The LLM may extract candidate numeric fields such as subtotal, tax, tip, service charge, etc.
+- Deterministic code must compute or decide derived values such as true expense, and other processed values that the app currently uses.
+
+Structured output:
+- The LLM should follow the schemas we have been using for the app. The outputs must follow the JSON we create during usual data extraction, which then are forwarded to data processing.
+
+Graceful degradation:
+- If ENABLE_LLM=false, use the current deterministic extraction path only.
+- If ENABLE_LLM=true but the LLM fails for any reason, fall back to the current deterministic behavior.
+- LLM failure includes missing API key, API error, timeout, rate limit, unsupported file type, invalid structured output, failed schema validation, or failed downstream validation.
+- Surface a warning that LLM extraction failed and deterministic fallback was used.
+- The app should not crash or block CSV generation because of LLM failure.
+
+Logging:
+- Log whether each file used deterministic extraction or LLM extraction.
+- Log LLM failure reasons without exposing API keys or sensitive credential values.
+- Avoid logging full file contents unless an existing debug flag explicitly allows it.
+- Log usual LLM diagnostics (token cost, etc.)
+
+Testing:
+- Add tests or smoke tests for:
+    - LLM disabled path.
+    - LLM enabled path with mocked successful extraction.
+    - LLM enabled path with mocked failure and deterministic fallback.
+    - Invalid LLM structured output causing fallback.
+    - Conversion from LLM extraction output into the existing downstream pipeline format.
+    - Any others deemed useful
+
+Documentation:
+- Continue README's in module subfolders.
+- Update root README with:
+    - How to enable LLM support.
+    - Required environment variables.
+    - How to create a local .env file from .env.example.
+    - Explanation that LLM support is optional and the app works without it.
+    - Explanation of text vs file input modes.
+
+
+Let me know your review on this implementation. We'll go through the usual stages of planning, reviewing, approving, and implementing
+
+Codex 2026-04-26 18:18:00 CDT
+Your spec is strong and fully implementable on `implement-llm` without breaking the current deterministic flow.
+
+Current understanding:
+1. LLM extraction must be optional, default-off, and never block output generation.
+2. Deterministic extraction remains the reliability baseline and fallback for all LLM failures.
+3. LLM is only for semantic field extraction, not arithmetic/business-rule outcomes.
+4. LLM output must normalize into the same structured extraction shape already used by processing/template rendering.
+5. Configuration is env-driven (`ENABLE_LLM`, `OPENAI_API_KEY`, `OPENAI_MODEL`, `LLM_INPUT_MODE`), with `.env.example` placeholders only.
+6. Logging must capture extraction mode and LLM diagnostics without leaking secrets/content.
+
+Implementation review (recommended design):
+1. Add a dedicated LLM module boundary (single integration point), not scattered calls.
+2. Introduce an extraction orchestrator that does deterministic baseline extraction, optional LLM attempt, schema validation, safe merge/use, and deterministic fallback on any failure.
+3. Keep the rest of pipeline unchanged: contradiction handling, review flows, processing math, template rendering, exports.
+
+Planned changes:
+1. Config updates and `.env.example` additions for `ENABLE_LLM`, `OPENAI_API_KEY`, `OPENAI_MODEL`, `LLM_INPUT_MODE`.
+2. New `src/receipt_processor/llm/` package with config, client interface, OpenAI wrapper, schema/normalization, extractor service, and orchestrator.
+3. Pipeline integration through orchestrator only.
+4. Input-mode behavior for `text`, `file`, `auto` with graceful fallback.
+5. Logging for extraction mode and LLM diagnostics without secrets/content.
+6. Tests for disabled/success/failure/invalid-output/conversion paths.
+7. README updates (root + module docs).
+
+One important implementation choice:
+- For `LLM_INPUT_MODE=file`, direct file mode will support image inputs first; unsupported direct file types will fallback to deterministic/text path with warning.
+
+If you approve this plan, implementation will proceed within that scope.
+
+User 2026-04-26 18:19:00 CDT
+All right, let's get this implemented. Afterwards, I will supply the token in private.
+
+Codex 2026-04-26 18:54:00 CDT
+Implemented on branch `implement-llm` with deterministic-safe fallback preserved.
+
+What’s now in place:
+- Optional LLM config (default off) in `.env.example`: `ENABLE_LLM`, `OPENAI_API_KEY`, `OPENAI_MODEL`, `LLM_INPUT_MODE`.
+- New LLM module with config, provider client wrapper, schema normalization, extractor service, and orchestrator.
+- Pipeline now uses one clean extraction interface with deterministic fallback.
+- CLI/GUI warning surfacing for LLM fallback.
+- Logging includes extraction mode and non-sensitive LLM diagnostics.
+- Added LLM config/orchestrator/pipeline integration tests.
+
+Validation:
+- `69 passed`.
+
+Docs updated:
+- Root README, architecture, operations, changelog, decisions, and module READMEs.
+
+User 2026-04-26 18:55:00 CDT
+Ok, I've made a structure-changing decision. I've been hinting at using or defaulting to the OpenAI LLM API, however I want to change this. We should build this around using OpenRouter.ai so that the model configuration is robust. Then it makes sense in this case to have fallbacks on whether the model has capabilities for pdf/image inputs where that is the default, then fallback to local text extraction for input (by the way, we should ensure the model will see the file contents that might not be seen without OCR, so there should be a check for whether we need OCR or not)
+
+Can you make this change and remove references to openai. Ensure the environment variables are reflected appropriately now for working under openrouter
+
+Codex 2026-04-26 19:02:00 CDT
+Implemented OpenRouter-first LLM integration with capability-aware file input fallback and OCR-aware text fallback.
+
+Summary:
+- Switched LLM provider client to OpenRouter (`openrouter_client.py`) and removed OpenAI runtime references.
+- Updated env contract to OpenRouter variables in `.env.example`.
+- `LLM_INPUT_MODE` default is now `auto`.
+- `auto` mode attempts direct file input for image/PDF, then falls back to OCR/local text input.
+- Added OCR/text sufficiency checks before text-mode LLM requests.
+- Updated README/docs/tests accordingly.
+- Validation: `70 passed`.
+
+User 2026-04-26 19:09:00 CDT
+Ok, the current LLM configuration is in environment variables which is good. I want to include flags now (in CLI and GUI) to change some of these at runtime.
+So there should be options for `enable_llm`, `llm_model`, and `llm_input_mode` that can be decided as overrides for what's found in the environment variables. By this, the environment variables are the default values, but changeable without re-sourcing and such
+
+User 2026-04-26 19:11:00 CDT
+Ok, the current LLM configuration is in environment variables which is good. I want to include flags now (in CLI and GUI) to change some of these at runtime.
+So there should be options for `enable_llm`, `llm_model`, and `llm_input_mode` that can be decided as overrides for what's found in the environment variables. By this, the environment variables are the default values, but changeable without re-sourcing and such
+
+Codex 2026-04-26 19:21:00 CDT
+Implemented runtime LLM overrides for both CLI and GUI, with environment values still as defaults.
+
+What changed:
+- Added pipeline-level runtime override support (`enable_llm`, `llm_model`, `llm_input_mode`) with env-first and per-run override precedence.
+- Added CLI flags: `--enable-llm` / `--disable-llm`, `--llm-model`, `--llm-input-mode`.
+- Added GUI Advanced overrides for LLM enable/model/input mode.
+- Added tests for override behavior and updated docs.
+
+Validation:
+- Full suite passed: `73 passed`.
+
+User 2026-04-26 19:22:00 CDT
+Do i need to make a `.env` with my desired preferences or does that go somewhere in the .venv?
+
+Codex 2026-04-26 19:23:00 CDT
+Use a `.env` in the project root (same level as `.env.example`), not inside `.venv`.
+
+- `.venv/` is only for Python packages/interpreter state.
+- `.env` is for config preferences (`ENABLE_LLM`, `OPENROUTER_MODEL`, etc.).
+- `.env` is git-ignored.
+- You can also use CLI overrides each run.
+
+User 2026-04-26 19:40:00 CDT
+Okay, running it, I'm seeing the fallback error "missing_api_key" but I put it in .env
+
+Codex 2026-04-26 19:41:00 CDT
+That error means the app process doesn’t currently have `OPENROUTER_API_KEY` in its environment.
+A `.env` file by itself is not auto-loaded yet.
+
+Use before running:
+
+```bash
+set -a
+source .env
+set +a
+receipts_processor data/inbox ...
+```
+
+Quick check:
+
+```bash
+python -c "import os; print(bool(os.getenv('OPENROUTER_API_KEY')))"
+```
+
+If you want, automatic `.env` loading can be implemented.
+
+User 2026-04-26 19:42:00 CDT
+How would you implement automatic loading? And is that safe?
+
+User 2026-04-26 19:43:00 CDT
+Sure lets do it
+
+Codex 2026-04-26 19:49:00 CDT
+Implemented automatic `.env` loading for CLI and GUI startup with safe defaults (`override=False`).
+
+Summary:
+- Added `src/receipt_processor/config/env_loader.py`.
+- Wired loader into CLI run and GUI startup.
+- Added `python-dotenv` dependency and lockfile entry.
+- Added env-loader tests and CLI auto-load test.
+- Updated docs for auto-loading behavior.
+- Validation: `77 passed`.
+
+User 2026-04-26 19:50:00 CDT
+This is great! It works. But there are places to improve performance for sure.
+
+1. I propose we set choices for `transaction_type` to be between `Food`, `Transportation`, `Lodging`, and `Misc`
+2. Input to the LLM should include not just the receipt file (or extracted file text), but also the filename, any found bank/credit statements, and any found notes.txt . This should give the LLM the maximum amount of information to answer the necessary questions.
+3. We should iterate on the prompt a bit more to reflect the types of information being fed to it that includes the context of the app. The LLM should understand the intent of the structured entries we're looking for, so that there is semantic meaning in its search.
+
+User 2026-04-26 20:33:27 CDT
+Let's also implement a flag that decides whether the LLM should get a first try at exception handling - perhaps it can decide the more obvious choice in a contradiction for example.
+But it should be modest - if it's not easily obvious, then it should fall back to the user.
+
+Codex 2026-04-26 20:37:58 CDT
+Implemented. The new optional flag is now wired so LLM gets a conservative first pass on exception resolution, then falls back to user review when not clearly obvious.
+
+What I changed
+- Added env config: `ENABLE_LLM_EXCEPTION_ASSIST` (default `false`) in [.env.example](<REDACTED_PATH>).
+- Added LLM setting + runtime override plumbing in:
+  - [config.py](<REDACTED_PATH>)
+  - [pipeline.py](<REDACTED_PATH>)
+- Added CLI flag:
+  - `--enable-llm-exception-assist/--disable-llm-exception-assist` in [cli.py](<REDACTED_PATH>)
+- Added GUI Advanced override:
+  - `LLM Exception Assist Override (env|enable|disable)` in [gui.py](<REDACTED_PATH>)
+- Added a dedicated conservative LLM review-assist module:
+  - [review_assist.py](<REDACTED_PATH>)
+- Extended OpenRouter client with a dedicated assist call:
+  - [openrouter_client.py](<REDACTED_PATH>)
+
+Modest behavior (as requested)
+- Only attempts assist for `contradiction_detected` and `low_confidence`.
+- Only auto-resolves when confidence is high (`>= 0.90`).
+- Only accepts values that exactly match existing review options (no invented/manual values).
+- If ambiguous/invalid/low-confidence/misconfigured/failing, it falls back to normal user review flow.
+- Existing deterministic + exception flow remains authoritative.
+
+Tests
+- Added/updated:
+  - [test_llm_review_assist.py](<REDACTED_PATH>)
+  - [test_review_resolution.py](<REDACTED_PATH>)
+  - [test_llm_runtime_overrides.py](<REDACTED_PATH>)
+  - [test_llm_config.py](<REDACTED_PATH>)
+  - [test_cli.py](<REDACTED_PATH>)
+- Validation result: `84 passed`.
+
+Docs updated
+- [README.md](<REDACTED_PATH>)
+- [src/receipt_processor/llm/README.md](<REDACTED_PATH>)
+- [docs/ARCHITECTURE.md](<REDACTED_PATH>)
+- [docs/CHANGELOG.md](<REDACTED_PATH>)
+- [docs/DECISIONS.md](<REDACTED_PATH>)
+- [docs/OPERATIONS.md](<REDACTED_PATH>)
+
+Also updated [CODEX_LOG.md](<REDACTED_PATH>) and ran redaction over last 2000 lines.
+
+User 2026-04-26 20:37:58 CDT
+Ok, now it's important to know what exactly is happening to calculate confidence. Explain to me how this gets quantified
+
+Codex 2026-04-26 21:06:54 CDT
+Implemented all three requests.
+
+What changed
+
+1. LLM exception assist now has no fixed confidence threshold
+- Removed numeric gating in [review_assist.py](<REDACTED_PATH>).
+- If assist is enabled, it gets first pass.
+- If it returns `abstain` / invalid / ambiguous option output, pipeline reports fallback and routes to user review.
+- Added explicit fallback warning event handling in:
+  - [pipeline.py](<REDACTED_PATH>)
+  - [cli.py](<REDACTED_PATH>)
+  - [gui.py](<REDACTED_PATH>)
+
+2. Run-start status report
+- Added run status callback/event from pipeline with:
+  - deterministic vs LLM-supported mode
+  - configured model slug being used for LLM requests
+  - enabled LLM flags/overrides
+- Wired into CLI and GUI output:
+  - [pipeline.py](<REDACTED_PATH>)
+  - [cli.py](<REDACTED_PATH>)
+  - [gui.py](<REDACTED_PATH>)
+
+3. Progress display
+- Added per-file progress event and surfaced as:
+  - `<filename> [x% / 100%]`
+- Implemented in:
+  - [pipeline.py](<REDACTED_PATH>)
+  - [cli.py](<REDACTED_PATH>)
+  - [gui.py](<REDACTED_PATH>)
+
+Also updated
+- Prompt wording for review-assist expectations in [openrouter_client.py](<REDACTED_PATH>)
+- Docs:
+  - [README.md](<REDACTED_PATH>)
+  - [src/receipt_processor/llm/README.md](<REDACTED_PATH>)
+  - [docs/CHANGELOG.md](<REDACTED_PATH>)
+  - [docs/DECISIONS.md](<REDACTED_PATH>)
+  - [docs/OPERATIONS.md](<REDACTED_PATH>)
+
+Validation
+- Full test suite passes: `88 passed`.
+
+If you want, next I can tune the CLI progress line to update in-place (single-line animated style) instead of printing one line per file.
+
+User 2026-04-26 21:06:54 CDT
+Ok, I've run on a directory and have performance diagnostics from the status reports. Here is what I see
+
+```
+Ready. Select a receipts folder and click Run.
+Running extraction for: <REDACTED_PATH>
+Run mode: deterministic extraction (LLM disabled).
+20250817-Food&PPE-DeathValleyNuts&Candy.pdf [6% / 100%]
+20250817-Food-InNOut.pdf [12% / 100%]
+Review required for 20250817-Food-MountainRamblerBrewery.pdf: Contradiction Detected
+20250817-Food-MountainRamblerBrewery.pdf [18% / 100%]
+Run cancelled by user.
+Running extraction for: <REDACTED_PATH>
+Run mode: LLM-supported extraction (model=openrouter/free, input_mode=text, exception_assist=enabled).
+20250817-Food&PPE-DeathValleyNuts&Candy.pdf [6% / 100%]
+20250817-Food-InNOut.pdf [12% / 100%]
+20250817-Food-MountainRamblerBrewery.pdf [18% / 100%]
+Info (20250817-Transportation-CheckedBagFee.pdf): LLM exception assist abstained for contradiction_detected (OpenRouter API HTTP error: status=400); falling back to user review.
+Review required for 20250817-Transportation-CheckedBagFee.pdf: Contradiction Detected
+20250817-Transportation-CheckedBagFee.pdf [24% / 100%]
+Warning (20250817-Transportation-DepartureFlight.PDF): LLM extraction failed; deterministic fallback used (OpenRouter response missing message content.).
+Info (20250817-Transportation-DepartureFlight.PDF): LLM exception assist abstained for contradiction_detected (OpenRouter response missing message content.); falling back to user review.
+Review required for 20250817-Transportation-DepartureFlight.PDF: Contradiction Detected
+20250817-Transportation-DepartureFlight.PDF [29% / 100%]
+Warning (20250817-Transportation-LyftToAirport.pdf): LLM extraction failed; deterministic fallback used (OpenRouter response missing message content.).
+Info (20250817-Transportation-LyftToAirport.pdf): LLM exception assist abstained for contradiction_detected (OpenRouter API HTTP error: status=429); falling back to user review.
+Review required for 20250817-Transportation-LyftToAirport.pdf: Contradiction Detected
+20250817-Transportation-LyftToAirport.pdf [35% / 100%]
+Warning (20250818-Food-GreatBasinBakery.pdf): LLM extraction failed; deterministic fallback used (OpenRouter response missing message content.).
+20250818-Food-GreatBasinBakery.pdf [41% / 100%]
+Warning (20250818-Food-QuickFuel.pdf): LLM extraction failed; deterministic fallback used (OpenRouter API HTTP error: status=429).
+20250818-Food-QuickFuel.pdf [47% / 100%]
+Warning (20250820-Food-LaTaqueriaLasPalmas.pdf): LLM extraction failed; deterministic fallback used (OpenRouter API HTTP error: status=429).
+Info (20250820-Food-LaTaqueriaLasPalmas.pdf): LLM exception assist abstained for contradiction_detected (OpenRouter API HTTP error: status=429); falling back to user review.
+Review required for 20250820-Food-LaTaqueriaLasPalmas.pdf: Contradiction Detected
+20250820-Food-LaTaqueriaLasPalmas.pdf [53% / 100%]
+Warning (20250821-Food-JackInTheBox.pdf): LLM extraction failed; deterministic fallback used (OpenRouter API HTTP error: status=400).
+Info (20250821-Food-JackInTheBox.pdf): LLM exception assist abstained for contradiction_detected (OpenRouter response missing message content.); falling back to user review.
+Review required for 20250821-Food-JackInTheBox.pdf: Contradiction Detected
+20250821-Food-JackInTheBox.pdf [59% / 100%]
+Warning (20250821-Food-PizzaRockLasVegas.PDF): LLM extraction failed; deterministic fallback used (OpenRouter response missing message content.).
+Info (20250821-Food-PizzaRockLasVegas.PDF): LLM exception assist abstained for contradiction_detected (abstained); falling back to user review.
+Review required for 20250821-Food-PizzaRockLasVegas.PDF: Contradiction Detected
+20250821-Food-PizzaRockLasVegas.PDF [65% / 100%]
+Warning (20250821-Transportation-UberToHotel.PDF): LLM extraction failed; deterministic fallback used (OpenRouter API error: {'message': 'The operation was aborted', 'code': 504}).
+20250821-Transportation-UberToHotel.PDF [71% / 100%]
+20250822-Food-Starbucks.pdf [76% / 100%]
+20250822-Transportation-CheckedBagFee.pdf [82% / 100%]
+Info (20250822-Transportation-ReturnFlight.PDF): LLM exception assist abstained for contradiction_detected (abstained); falling back to user review.
+Review required for 20250822-Transportation-ReturnFlight.PDF: Contradiction Detected
+20250822-Transportation-ReturnFlight.PDF [88% / 100%]
+Warning (20250822-Transportation-TaxiFromAirport.pdf): LLM extraction failed; deterministic fallback used (OpenRouter API HTTP error: status=400).
+Info (20250822-Transportation-TaxiFromAirport.pdf): LLM exception assist abstained for contradiction_detected (OpenRouter API HTTP error: status=429); falling back to user review.
+Review required for 20250822-Transportation-TaxiFromAirport.pdf: Contradiction Detected
+20250822-Transportation-TaxiFromAirport.pdf [94% / 100%]
+Warning (20250822-Transportation-UberToAirport.PDF): LLM extraction failed; deterministic fallback used (OpenRouter API HTTP error: status=400).
+Info (20250822-Transportation-UberToAirport.PDF): LLM exception assist abstained for contradiction_detected (OpenRouter response missing message content.); falling back to user review.
+Review required for 20250822-Transportation-UberToAirport.PDF: Contradiction Detected
+20250822-Transportation-UberToAirport.PDF [100% / 100%]
+Completed successfully: <REDACTED_PATH>
+```
+
+Does this inform you where the app can be improved?

@@ -22,7 +22,7 @@ PATTERN_REPLACEMENTS = [
         ),
         REDACTED_BLOB,
     ),
-    # OpenAI-style keys
+    # Common API key token shapes
     (re.compile(r"\bsk-[A-Za-z0-9_-]{20,}\b"), REDACTED_SECRET),
     # GitHub personal and fine-grained tokens
     (re.compile(r"\bgh[pousr]_[A-Za-z0-9]{20,}\b"), REDACTED_SECRET),

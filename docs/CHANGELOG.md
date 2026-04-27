@@ -8,6 +8,25 @@
 - Added `requirements.lock.txt` for pinned/reproducible installs.
 - Added SBOM generation/upload in security CI workflow (`sbom.cdx.json` artifact).
 - Added CI guard to fail if `docs/CODEX_LOG.md` contains unredacted absolute paths.
+- Added optional LLM extraction package (`src/receipt_processor/llm/`) with provider wrapper, schema normalization, and orchestration.
+- Added environment-based LLM config in `.env.example` (`ENABLE_LLM`, `OPENROUTER_API_KEY`, `OPENROUTER_MODEL`, `LLM_INPUT_MODE`).
+- Added fallback/diagnostic tests for LLM disabled, success, provider failure, invalid structured output, unsupported file mode, and downstream validation fallback.
+- Added pipeline integration tests for LLM fallback warnings and LLM-to-downstream conversion.
+- Added OpenRouter-first client implementation with direct image/PDF file-input support.
+- Added runtime LLM override controls in CLI (`--enable-llm/--disable-llm`, `--llm-model`, `--llm-input-mode`) and GUI Advanced options.
+- Added tests for LLM runtime override precedence over environment defaults.
+- Added automatic `.env` loading for CLI/GUI startup with safe precedence (`override=False` behavior).
+- Added environment-loader module and tests for non-overwrite/overwrite behavior.
+- Added canonical transaction-type normalization (`Food`, `Transportation`, `Lodging`, `Misc`) with dedicated tests.
+- Added richer LLM context assembly (filename + notes + statement excerpts) for semantic extraction requests.
+- Added prompt refinements for app-intent extraction and fixed transaction-type choice constraints.
+- Added optional conservative LLM exception assist (`ENABLE_LLM_EXCEPTION_ASSIST`) for contradiction/low-confidence review pre-resolution.
+- Added CLI/GUI runtime override controls for LLM exception assist.
+- Added tests for LLM exception-assist resolution gating and pipeline integration.
+- Added run-start mode/status reporting callbacks and per-receipt progress events (`<filename> [x% / 100%]`) surfaced in CLI/GUI.
+- Added LLM stability hardening: transient provider retries and run-level circuit-breaker fallback to deterministic mode after repeated provider failures.
+- Added safeguard to skip LLM exception assist on receipts where LLM extraction already failed for provider/API reasons.
+- Added parser hardening for varied OpenRouter response shapes (including tool-call arguments and fenced JSON extraction).
 
 ### Changed
 - Updated architecture and quality docs to reflect current template-driven runtime checks (and optional/non-gating validation module status).
@@ -16,6 +35,17 @@
 - Redacted existing absolute filepaths from `docs/CODEX_LOG.md` to align with governance policy.
 - Removed committed build artifacts under `src/receipt_processor.egg-info/`.
 - Added `.gitignore` rule for `*.egg-info/`.
+- Updated pipeline extraction flow to use a single optional LLM extraction interface with guaranteed deterministic fallback on any LLM failure.
+- Switched optional LLM provider configuration from OpenAI-style env vars to OpenRouter env vars.
+- Updated LLM mode behavior so `auto` defaults to direct file mode (image/PDF) with automatic text-mode fallback when file-mode capability is unavailable.
+- Added OCR-aware text sufficiency checks before text-mode LLM extraction retries.
+- Updated CLI/GUI warning output to surface when LLM fallback is used.
+- Updated pipeline run configuration to apply per-run LLM overrides over environment defaults.
+- Updated documentation to clarify that `.env` is auto-loaded from current working directory.
+- Updated extraction flow so unknown transaction type remains blank during early review gating and resolves to canonical `Misc` in processing.
+- Updated observability docs to describe extraction strategy and LLM diagnostics logging.
+- Updated pipeline review flow so LLM exception assist only auto-applies explicit option-based resolutions, otherwise falls back to user review.
+- Updated LLM exception assist behavior to remove fixed confidence-threshold gating; assist now resolves only by explicit option selection and abstains/falls back to user review when not obvious.
 
 ## 2026-04-25
 

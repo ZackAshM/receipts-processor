@@ -6,6 +6,7 @@ from pathlib import Path
 import re
 
 from receipt_processor.extraction.receipt_parser import parse_receipt_text
+from receipt_processor.extraction.transaction_type import normalize_transaction_type
 
 NOTE_NAME_TOKENS = ("note", "notes", "memo", "context")
 IGNORED_FUZZY_TOKENS = set(NOTE_NAME_TOKENS) | {"receipt", "img", "image", "scan", "screenshot"}
@@ -89,21 +90,32 @@ def _parse_key_value_lines(text: str) -> dict[str, str]:
     return parsed
 
 
-def infer_fields_from_notes(input_dir: Path, receipt_path: Path) -> tuple[dict[str, str], list[str]]:
-    """Return inferred fields and matched note filenames for a receipt."""
-    fields: dict[str, str] = {}
-    matched_files: list[str] = []
-
+def collect_note_context(input_dir: Path, receipt_path: Path) -> list[tuple[str, str]]:
+    """Return note filename/text pairs relevant to the receipt."""
+    entries: list[tuple[str, str]] = []
     for note_path in _candidate_note_files(input_dir, receipt_path):
         try:
             text = note_path.read_text(encoding="utf-8", errors="ignore")
         except OSError:
             continue
-
         if not text.strip():
             continue
+        entries.append((note_path.name, text))
+    return entries
 
-        matched_files.append(note_path.name)
+
+def infer_fields_from_notes(
+    input_dir: Path,
+    receipt_path: Path,
+    note_context: list[tuple[str, str]] | None = None,
+) -> tuple[dict[str, str], list[str]]:
+    """Return inferred fields and matched note filenames for a receipt."""
+    fields: dict[str, str] = {}
+    matched_files: list[str] = []
+
+    entries = note_context if note_context is not None else collect_note_context(input_dir, receipt_path)
+    for note_name, text in entries:
+        matched_files.append(note_name)
         explicit_fields = _parse_key_value_lines(text)
         heuristic_fields = parse_receipt_text(text)
         combined_fields: dict[str, str] = dict(explicit_fields)
@@ -115,7 +127,7 @@ def infer_fields_from_notes(input_dir: Path, receipt_path: Path) -> tuple[dict[s
 
         # If notes explicitly provide vendor, ensure description reflects that vendor.
         if explicit_fields.get("vendor") and not explicit_fields.get("description"):
-            expense_type = combined_fields.get("expense_type", "Other")
+            expense_type = normalize_transaction_type(combined_fields.get("expense_type", "Misc"))
             combined_fields["description"] = f"{expense_type} - {explicit_fields['vendor']}"
 
         for key, value in combined_fields.items():

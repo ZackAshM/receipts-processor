@@ -11,6 +11,11 @@
 7. Review detailed sidecar JSON (`*_detailed.json`) for extracted/processed fields, contribution itemization, and run summary totals.
 8. Review runtime logs under `logs/performance-YYYY-MM-DD.jsonl` for performance/debug diagnostics.
 9. Tune confidence routing in `configs/risk_controls.yaml` (or pass `--risk-controls-file`) as needed.
+10. Optional: enable LLM semantic extraction via `.env` (`ENABLE_LLM=true`, `OPENROUTER_API_KEY`, `OPENROUTER_MODEL`, `LLM_INPUT_MODE`), and optionally enable conservative LLM-first exception assist (`ENABLE_LLM_EXCEPTION_ASSIST=true`).
+11. Optional: override LLM settings per run through CLI/GUI runtime controls without changing environment files.
+12. CLI/GUI automatically load `.env` from the current working directory with safe precedence (existing exported env vars are not overwritten).
+13. At run start, verify mode summary output (deterministic vs LLM-supported, model, and enabled flags), then monitor per-file progress lines (`<filename> [x% / 100%]`).
+14. If repeated provider failures occur, the run opens an LLM circuit breaker and continues in deterministic mode for remaining files.
 
 ## Security Controls in Runtime
 
@@ -20,6 +25,7 @@
 - Runtime logs intentionally avoid raw receipt text and focus on operational metadata.
 - Exception sidecar exports are sanitized to prevent spreadsheet-formula execution.
 - Optional runtime privacy mode can mask file-level identifiers in telemetry (`RECEIPT_PROCESSOR_LOG_PRIVACY_MODE=redacted`).
+- LLM failures (if enabled) are non-fatal and automatically fall back to deterministic extraction.
 
 ## Human-in-the-Loop Controls
 

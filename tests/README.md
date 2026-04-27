@@ -15,3 +15,10 @@ Contents:
 - `test_template_renderer.py`: model-template keyword and operation rendering behavior.
 - `test_structured_extraction_and_processing.py`: deterministic structured extraction and processing rules.
 - `test_detailed_json_output.py`: run-level detailed JSON sidecar emission.
+- `test_llm_config.py`: environment-driven LLM config defaults and parsing.
+- `test_llm_orchestrator.py`: optional LLM success/fallback behavior and downstream validation fallback.
+- `test_pipeline_llm_integration.py`: pipeline integration for LLM warning flow and LLM-to-output conversion.
+- `test_llm_runtime_overrides.py`: runtime override precedence over environment defaults.
+- `test_llm_review_assist.py`: conservative LLM exception-assist option-resolution gating.
+- `test_env_loader.py`: automatic `.env` loading behavior and override safety.
+- `test_transaction_type.py`: canonical transaction-type normalization and defaults.

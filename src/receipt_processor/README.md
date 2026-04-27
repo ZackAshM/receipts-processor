@@ -12,3 +12,4 @@ Contents:
 - `processing/`: deterministic post-extraction calculations and run-level summaries.
 - `quality/`: confidence scoring, consistency checks, optional validation utilities, and exception queue helpers.
 - `observability/`: structured runtime logging for performance/debugging.
+- `llm/`: optional LLM semantic extraction and conservative exception-assist orchestration with deterministic/user-review fallback.

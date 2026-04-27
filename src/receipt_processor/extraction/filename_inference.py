@@ -66,6 +66,6 @@ def infer_fields_from_filename(filename: str, current_fields: dict) -> dict[str,
     if vendor and not current_fields.get("vendor"):
         inferred["vendor"] = vendor
     if vendor and not current_fields.get("description"):
-        inferred["description"] = f"Other - {vendor}"
+        inferred["description"] = f"Misc - {vendor}"
 
     return inferred
