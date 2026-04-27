@@ -187,17 +187,7 @@ def extract_structured_data(receipt_path: Path, document: DocumentExtraction) ->
     text_items = _line_items_from_text_lines(lines)
     line_items = _dedupe_items(ocr_items + text_items)
 
-    highlighted_items = [item for item in line_items if bool(item.get("is_highlighted"))]
-    has_highlights = len(highlighted_items) > 0
-    if has_highlights:
-        contributing_items = highlighted_items
-        highlighted_keys = {(item["name"], item["amount"]) for item in highlighted_items}
-        noncontributing_items = [
-            item for item in line_items if (item["name"], item["amount"]) not in highlighted_keys
-        ]
-    else:
-        contributing_items = list(line_items)
-        noncontributing_items = []
+    has_highlights = any(bool(item.get("is_highlighted")) for item in line_items)
 
     amount_paid = totals.get("amount_paid")
     if amount_paid is None:
@@ -224,12 +214,6 @@ def extract_structured_data(receipt_path: Path, document: DocumentExtraction) ->
         "transaction_type": transaction_type,
         "currency": _detect_currency(raw_text),
         "line_items": line_items,
-        "contributing_items": contributing_items,
-        "noncontributing_items": noncontributing_items,
-        "contributing_items_total": round(sum(float(item["amount"]) for item in contributing_items), 2),
-        "noncontributing_items_total": round(sum(float(item["amount"]) for item in noncontributing_items), 2),
-        "contributing_items_count": len(contributing_items),
-        "noncontributing_items_count": len(noncontributing_items),
         "subtotal": totals.get("subtotal"),
         "tax": totals.get("tax"),
         "tip": totals.get("tip"),

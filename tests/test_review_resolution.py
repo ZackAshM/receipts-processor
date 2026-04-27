@@ -289,6 +289,7 @@ def test_non_required_contradictions_are_logged_but_do_not_block_output(tmp_path
         example_file=example_file,
         output_file=output,
         log_dir=tmp_path / "logs",
+        enable_llm=False,
         review_handler=review_handler,
         warning_handler=warning_events.append,
     )

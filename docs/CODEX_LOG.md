@@ -2108,3 +2108,110 @@ Completed successfully: <REDACTED_PATH>
 ```
 
 Does this inform you where the app can be improved?
+
+User 2026-04-26 22:46:23 CDT
+Ok, you're right, a better model performs way better.
+
+But I've found a few issues we'll still need to improve on.
+
+1. The transaction_date should be coverted to a consistent format. My last run returned date entries that are different formats. We should enforce "YYYY/MM/DD" format
+2. There's issues with the "true_expense" being found. I put the example receipts that gave this issue in the data/inbox/. Take a look and see if there's an issue from the processing step, or if prompt engineering could be improved for such cases (while not being highly specific). I also put the output files in data/output/ but it also contains additional receipts that I didn't bother including in inbox. Ignore those missing ones.
+3. There seems to be a slight confusion trying to get merchant_name or vendor. I thought this would be not so hard. But maybe RAG is needed? We don't have to implement now, but wondering your thoughts on this.
+
+Codex 2026-04-26 23:07:46 CDT
+Implemented and validated. The issues were mostly in processing/reconciliation (not just prompt quality), and I fixed that plus date normalization.
+
+**What I changed**
+1. Enforced consistent `transaction_date` formatting as `YYYY/MM/DD` in pipeline/runtime output.
+- [pipeline.py](<REDACTED_PATH>)
+- [pipeline.py](<REDACTED_PATH>)
+- [pipeline.py](<REDACTED_PATH>)
+- [template_renderer.py](<REDACTED_PATH>)
+
+2. Fixed `true_expense` undercount behavior by improving processing reconciliation:
+- Noncontributing items that look like tax/tip/fee/credit are treated as likely misclassification noise unless stronger evidence exists.
+- Reconciliation now prefers `amount_paid` when component totals or line-item totals indicate that’s the reliable value.
+- [expense_processor.py](<REDACTED_PATH>)
+- [expense_processor.py](<REDACTED_PATH>)
+
+3. Added/updated tests for these behaviors and updated date expectations.
+- [test_structured_extraction_and_processing.py](<REDACTED_PATH>)
+- [test_notes_and_flags.py](<REDACTED_PATH>)
+- [test_pipeline_llm_integration.py](<REDACTED_PATH>)
+- [test_review_resolution.py](<REDACTED_PATH>)
+
+**Validation**
+- Full suite passes: `93 passed`.
+- Your sample problematic receipts (recomputed from extracted payloads) now reconcile as expected:
+  - InNOut: `13.60 -> 14.74`
+  - Jack in the Box: `14.88 -> 16.18`
+  - ReturnFlight: `418.98 -> 418.48`
+  - UberToAirport: `23.57 -> 38.88`
+
+**On merchant/vendor confusion (RAG question)**
+- RAG is not the first thing I’d add here.
+- Better near-term path:
+1. Strong deterministic vendor normalization (suffix/location cleanup, common OCR artifacts).
+2. Source-priority merge scoring (`file text`, `filename`, `notes`, `statement context`) with confidence.
+3. Optional local alias map (user-maintained merchant canonicalization).
+4. If long-tail ambiguity remains, then add retrieval-backed canonicalization as a separate optional step.
+
+Also updated [CODEX_LOG.md](<REDACTED_PATH>) with your latest prompt and ran the redaction script on the last 2000 lines.
+
+User 2026-04-26 23:07:46 CDT
+Ok, better, but still some issues. I put the updated output for you to see.
+
+1. There was a slip in the transaction_date formatting for QUICK FUEL LLC. This should not have been possible.
+2. There's still some issues in how noncontributing and contributing items are being counted. It should be absolutely impossible for there to be noncontributing items to be considered unless there's highlights - it should be the processor that determines contributing vs noncontributing based solely on highlights (if all are not highlighted, then all are contributing, and if only some are highlighted, then only highlighted are contributing and the rest non-contributing).
+3. Tax, tip, fees, etc. should always be considered contributing in the calculation for true_expense
+
+User 2026-04-26 23:25:02 CDT
+While you're at it, you should do a more robust datetime handling so any date format would be normalized.
+The notion of (non)contributing items is exclusively for receipt line items. It should not consider tip, tax, etc. So while fixing the highlight checks in the processing, make sure that also only looks through line items. In fact, the LLM and data extractor should probably not return "contributing" and "non-contributing" items, it should replace those with just "line_items". That will probably be a good enough clarifcation.
+Do not include any reference to the examples I provided. So don't mention things like "Quick Fuel-style".
+
+Also make sure that changes you make for the LLM support that also would work well with the deterministic approach are made so that the deterministic approach is also being kept up to working state.
+
+Codex 2026-04-26 23:31:39 CDT
+Implemented. The changes now enforce your contract across both deterministic and LLM flows.
+
+**What changed**
+1. Robust date normalization to `YYYY/MM/DD`
+- Expanded parsing to handle many date and datetime variants (including mixed text, 2-digit year formats, month words, compact forms, and OCR-like digit noise), then normalize to one format.
+- [template_renderer.py](<REDACTED_PATH>)
+- Also normalized dates after manual/LLM review edits so resolved values can’t bypass formatting.
+- [pipeline.py](<REDACTED_PATH>)
+
+2. Extraction now uses `line_items` (not pre-partitioned contributing/noncontributing)
+- Deterministic extraction no longer emits `contributing_*` / `noncontributing_*`; it emits `line_items` plus highlight metadata.
+- [structured_extractor.py](<REDACTED_PATH>)
+- LLM normalization now centers on `line_items`; legacy partitioned payloads are only merged for backward compatibility, then removed from extracted output.
+- [schema.py](<REDACTED_PATH>)
+- LLM prompt updated to request `line_items` (no contributing/noncontributing arrays).
+- [openrouter_client.py](<REDACTED_PATH>)
+
+3. Highlight-only partitioning is enforced in processing
+- Processing derives contributing vs noncontributing strictly from `line_items.is_highlighted`:
+  - if any highlighted: highlighted are contributing, others noncontributing
+  - if none highlighted: all contributing, noncontributing is empty
+- [expense_processor.py](<REDACTED_PATH>)
+
+4. Tax/tip/fees remain contributing in `true_expense`
+- Even if those entries appear in non-highlighted line items, they are not subtracted from true expense.
+- [expense_processor.py](<REDACTED_PATH>)
+
+**Validation**
+- Added/updated tests for:
+  - diverse datetime normalization
+  - line-item-only partition behavior
+  - noncontributing impossible when no highlights
+  - tax/tip/fee treatment in true-expense math
+- [test_template_renderer.py](<REDACTED_PATH>)
+- [test_structured_extraction_and_processing.py](<REDACTED_PATH>)
+- [test_llm_orchestrator.py](<REDACTED_PATH>)
+- Full suite: `95 passed`.
+
+Also updated [CODEX_LOG.md](<REDACTED_PATH>) and ran the redaction script over the last 2000 lines.
+
+User 2026-04-26 23:31:39 CDT
+Ok, I've staged for commit. Please update and add the CODEX_LOG.md and then commit with an appropriate message

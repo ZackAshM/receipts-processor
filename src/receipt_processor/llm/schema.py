@@ -28,8 +28,6 @@ SEMANTIC_PRESENCE_FIELDS = {
     "service_charge",
     "pre_tip_total",
     "line_items",
-    "contributing_items",
-    "noncontributing_items",
 }
 
 
@@ -123,13 +121,29 @@ def _has_semantic_signal(payload: dict[str, Any]) -> bool:
     return False
 
 
-def _partition_items(items: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+def _partition_items(
+    items: list[dict[str, Any]],
+    *,
+    allow_highlight_partition: bool,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    if not allow_highlight_partition:
+        return list(items), []
     highlighted = [item for item in items if bool(item.get("is_highlighted"))]
     if highlighted:
         highlighted_keys = {(item["name"], item["amount"]) for item in highlighted}
         non_contributing = [item for item in items if (item["name"], item["amount"]) not in highlighted_keys]
         return highlighted, non_contributing
     return list(items), []
+
+
+def _merge_legacy_partitioned_items(
+    *,
+    contributing_items: list[dict[str, Any]],
+    noncontributing_items: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    merged = list(contributing_items)
+    merged.extend(noncontributing_items)
+    return merged
 
 
 def normalize_llm_payload(
@@ -174,27 +188,38 @@ def normalize_llm_payload(
     contributing_payload = payload.get("contributing_items", None)
     noncontributing_payload = payload.get("noncontributing_items", None)
 
-    if contributing_payload is not None or noncontributing_payload is not None:
-        contributing_items = _normalize_items(contributing_payload, "contributing_items")
-        noncontributing_items = _normalize_items(noncontributing_payload, "noncontributing_items")
-        line_items = contributing_items + noncontributing_items
-    elif line_items_payload is not None:
+    if line_items_payload is not None:
         line_items = _normalize_items(line_items_payload, "line_items")
-        contributing_items, noncontributing_items = _partition_items(line_items)
+    elif contributing_payload is not None or noncontributing_payload is not None:
+        # Backward compatibility for older prompts that still return partitioned arrays.
+        line_items = _merge_legacy_partitioned_items(
+            contributing_items=_normalize_items(contributing_payload, "contributing_items"),
+            noncontributing_items=_normalize_items(noncontributing_payload, "noncontributing_items"),
+        )
     else:
         line_items = list(merged.get("line_items", []))
-        contributing_items = list(merged.get("contributing_items", []))
-        noncontributing_items = list(merged.get("noncontributing_items", []))
+        if not line_items:
+            line_items = _merge_legacy_partitioned_items(
+                contributing_items=list(merged.get("contributing_items", [])),
+                noncontributing_items=list(merged.get("noncontributing_items", [])),
+            )
 
+    contributing_items, noncontributing_items = _partition_items(
+        line_items,
+        allow_highlight_partition=bool(
+            deterministic_base.get("highlight_detection_available", False)
+        ),
+    )
+
+    merged.pop("contributing_items", None)
+    merged.pop("noncontributing_items", None)
+    merged.pop("contributing_items_total", None)
+    merged.pop("noncontributing_items_total", None)
+    merged.pop("contributing_items_count", None)
+    merged.pop("noncontributing_items_count", None)
     merged["line_items"] = line_items
-    merged["contributing_items"] = contributing_items
-    merged["noncontributing_items"] = noncontributing_items
-    merged["contributing_items_total"] = round(sum(float(item["amount"]) for item in contributing_items), 2)
-    merged["noncontributing_items_total"] = round(sum(float(item["amount"]) for item in noncontributing_items), 2)
-    merged["contributing_items_count"] = len(contributing_items)
-    merged["noncontributing_items_count"] = len(noncontributing_items)
     merged["has_highlighted_contributions"] = any(
-        bool(item.get("is_highlighted")) for item in contributing_items
+        bool(item.get("is_highlighted")) for item in line_items
     )
 
     confidence_raw = payload.get("confidence")

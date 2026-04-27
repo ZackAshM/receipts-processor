@@ -41,8 +41,6 @@ SYSTEM_PROMPT = (
     "\"pre_tip_total\": number|null, "
     "\"amount_paid\": number|null, "
     "\"line_items\": [{\"name\": string, \"amount\": number, \"is_highlighted\": boolean}], "
-    "\"contributing_items\": [{\"name\": string, \"amount\": number, \"is_highlighted\": boolean}], "
-    "\"noncontributing_items\": [{\"name\": string, \"amount\": number, \"is_highlighted\": boolean}], "
     "\"used_keywords\": {\"field_name\": \"evidence snippet\"}, "
     "\"confidence\": number|null, "
     "\"needs_review\": boolean|null"

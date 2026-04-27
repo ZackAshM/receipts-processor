@@ -7,6 +7,19 @@ from typing import Any
 
 from receipt_processor.extraction.transaction_type import normalize_transaction_type
 
+NONCONTRIBUTING_ADJUSTMENT_TOKENS = (
+    "tax",
+    "tip",
+    "gratuity",
+    "service",
+    "fee",
+    "surcharge",
+    "charge",
+    "credit",
+    "discount",
+    "vat",
+)
+
 
 def _round_money(value: float | int | None) -> float | None:
     if value is None:
@@ -32,6 +45,79 @@ def _to_bool(value: object) -> bool:
     return bool(value)
 
 
+def _item_amount(item: object) -> float | None:
+    if not isinstance(item, dict):
+        return None
+    value = item.get("amount")
+    if value is None:
+        return None
+    try:
+        return round(float(value), 2)
+    except (TypeError, ValueError):
+        return None
+
+
+def _sum_item_amounts(items: list[dict[str, Any]]) -> float:
+    return _safe_sum([_item_amount(item) for item in items])
+
+
+def _normalize_line_items(raw_items: object) -> list[dict[str, Any]]:
+    if not isinstance(raw_items, list):
+        return []
+    normalized: list[dict[str, Any]] = []
+    for item in raw_items:
+        if not isinstance(item, dict):
+            continue
+        name = str(item.get("name", "")).strip()
+        amount = _item_amount(item)
+        if not name or amount is None:
+            continue
+        normalized.append(
+            {
+                "name": name,
+                "amount": amount,
+                "is_highlighted": bool(_to_bool(item.get("is_highlighted", False))),
+                "source": str(item.get("source", "")).strip(),
+            }
+        )
+    return normalized
+
+
+def _fallback_legacy_line_items(extracted: dict[str, Any]) -> list[dict[str, Any]]:
+    contributing = _normalize_line_items(extracted.get("contributing_items", []))
+    noncontributing = _normalize_line_items(extracted.get("noncontributing_items", []))
+    return contributing + noncontributing
+
+
+def _partition_line_items(
+    line_items: list[dict[str, Any]],
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]], bool]:
+    highlighted = [item for item in line_items if bool(item.get("is_highlighted"))]
+    if highlighted:
+        noncontributing = [item for item in line_items if not bool(item.get("is_highlighted"))]
+        return highlighted, noncontributing, True
+    return list(line_items), [], False
+
+
+def _looks_like_adjustment_item(name: str) -> bool:
+    lowered = name.strip().lower()
+    return any(token in lowered for token in NONCONTRIBUTING_ADJUSTMENT_TOKENS)
+
+
+def _sum_effective_noncontributing(items: list[dict[str, Any]]) -> float:
+    effective: list[float | None] = []
+    for item in items:
+        name = str(item.get("name", "")).strip()
+        if not name:
+            continue
+        if _looks_like_adjustment_item(name):
+            # Taxes/tips/fees/credits are frequently misclassified by semantic extraction.
+            # We do not treat them as reducing true expense unless stronger evidence exists.
+            continue
+        effective.append(_item_amount(item))
+    return _safe_sum(effective)
+
+
 def process_structured_data(extracted: dict[str, Any]) -> dict[str, Any]:
     """Add processed fields and keyword-ready values for template rendering."""
     subtotal = _round_money(extracted.get("subtotal"))
@@ -41,8 +127,15 @@ def process_structured_data(extracted: dict[str, Any]) -> dict[str, Any]:
     pre_tip_total = _round_money(extracted.get("pre_tip_total"))
     amount_paid = _round_money(extracted.get("amount_paid"))
 
-    contributing_total = _round_money(extracted.get("contributing_items_total")) or 0.0
-    noncontributing_total = _round_money(extracted.get("noncontributing_items_total")) or 0.0
+    line_items = _normalize_line_items(extracted.get("line_items", []))
+    if not line_items:
+        # Backward compatibility for older extraction payloads.
+        line_items = _fallback_legacy_line_items(extracted)
+
+    contributing_items, noncontributing_items, has_highlighted_contributions = _partition_line_items(line_items)
+    contributing_total = _round_money(_sum_item_amounts(contributing_items)) or 0.0
+    noncontributing_total = _round_money(_sum_item_amounts(noncontributing_items)) or 0.0
+    effective_noncontributing_total = _round_money(_sum_effective_noncontributing(noncontributing_items)) or 0.0
 
     if pre_tip_total is None and subtotal is not None:
         pre_tip_total = _safe_sum([subtotal, tax, service_charge])
@@ -52,10 +145,14 @@ def process_structured_data(extracted: dict[str, Any]) -> dict[str, Any]:
     if amount_paid is None:
         amount_paid = _round_money(_safe_sum([contributing_total, noncontributing_total]))
 
-    if subtotal is not None or tax is not None or tip is not None or service_charge is not None:
+    has_component_values = subtotal is not None or tax is not None or tip is not None or service_charge is not None
+    component_total = _round_money(_safe_sum([subtotal, tax, tip, service_charge])) if has_component_values else None
+
+    if has_component_values:
         if subtotal is None and amount_paid is not None:
             subtotal = _round_money(amount_paid - _safe_sum([tax, tip, service_charge]))
-        true_expense = _safe_sum([subtotal, tax, tip, service_charge]) - noncontributing_total
+        component_total = _round_money(_safe_sum([subtotal, tax, tip, service_charge]))
+        true_expense = (component_total or 0.0) - effective_noncontributing_total
     else:
         if contributing_total > 0:
             true_expense = contributing_total
@@ -64,6 +161,24 @@ def process_structured_data(extracted: dict[str, Any]) -> dict[str, Any]:
         else:
             true_expense = 0.0
     true_expense = round(true_expense, 2)
+
+    line_items_total = _round_money(_safe_sum([contributing_total, noncontributing_total]))
+    if amount_paid is not None:
+        component_diff = abs((component_total or 0.0) - amount_paid) if component_total is not None else None
+        line_items_match_amount = line_items_total is not None and abs(line_items_total - amount_paid) <= 0.05
+        if (
+            effective_noncontributing_total <= 0.009
+            and component_total is not None
+            and component_diff is not None
+            and component_diff <= 0.75
+        ):
+            true_expense = round(amount_paid, 2)
+        elif (
+            effective_noncontributing_total <= 0.009
+            and line_items_match_amount
+            and (component_diff is None or component_diff > 0.5)
+        ):
+            true_expense = round(amount_paid, 2)
 
     receipt_expense = _round_money(amount_paid) or 0.0
     receipt_amount_if_different: float | None = None
@@ -77,9 +192,6 @@ def process_structured_data(extracted: dict[str, Any]) -> dict[str, Any]:
     merchant_name = str(extracted.get("merchant_name", "")).strip()
     description = f"{transaction_type} - {merchant_name}".strip(" -")
 
-    contributing_items = extracted.get("contributing_items", [])
-    noncontributing_items = extracted.get("noncontributing_items", [])
-
     needs_review = _to_bool(extracted.get("needs_review", False))
     confidence = extracted.get("confidence")
     if confidence is None:
@@ -90,6 +202,9 @@ def process_structured_data(extracted: dict[str, Any]) -> dict[str, Any]:
         "receipt_expense": receipt_expense,
         "receipt_amount_if_different": receipt_amount_if_different,
         "description": description,
+        "line_items": line_items,
+        "contributing_items": contributing_items,
+        "noncontributing_items": noncontributing_items,
         "subtotal": subtotal,
         "tax": tax,
         "tip": tip,
@@ -98,10 +213,9 @@ def process_structured_data(extracted: dict[str, Any]) -> dict[str, Any]:
         "amount_paid": amount_paid,
         "contributing_items_total": _round_money(contributing_total),
         "noncontributing_items_total": _round_money(noncontributing_total),
-        "contributing_items_count": int(extracted.get("contributing_items_count", len(contributing_items))),
-        "noncontributing_items_count": int(
-            extracted.get("noncontributing_items_count", len(noncontributing_items))
-        ),
+        "contributing_items_count": len(contributing_items),
+        "noncontributing_items_count": len(noncontributing_items),
+        "has_highlighted_contributions": has_highlighted_contributions,
         "contributing_item_names": " | ".join(
             str(item.get("name", "")).strip() for item in contributing_items if str(item.get("name", "")).strip()
         ),

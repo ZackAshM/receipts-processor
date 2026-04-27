@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import re
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any
 
 from receipt_processor.io.template_loader import TemplateHints
@@ -76,7 +76,95 @@ MONEY_FIELDS = {
     "total_noncontributing_items",
 }
 
-DATE_INPUT_FORMATS = ("%Y-%m-%d", "%Y/%m/%d", "%m/%d/%Y", "%m-%d-%Y")
+DATE_PARSE_FORMATS = (
+    "%Y-%m-%d",
+    "%Y/%m/%d",
+    "%Y.%m.%d",
+    "%m/%d/%Y",
+    "%m-%d-%Y",
+    "%m.%d.%Y",
+    "%m/%d/%y",
+    "%m-%d-%y",
+    "%m.%d.%y",
+    "%d/%m/%Y",
+    "%d-%m-%Y",
+    "%d.%m.%Y",
+    "%d/%m/%y",
+    "%d-%m-%y",
+    "%d.%m.%y",
+    "%Y%m%d",
+    "%d%b%Y",
+    "%d%b%y",
+    "%d%B%Y",
+    "%d%B%y",
+    "%d-%b-%Y",
+    "%d-%b-%y",
+    "%d-%B-%Y",
+    "%d-%B-%y",
+    "%b %d, %Y",
+    "%B %d, %Y",
+    "%b %d %Y",
+    "%B %d %Y",
+    "%d %b %Y",
+    "%d %B %Y",
+    "%d %b, %Y",
+    "%d %B, %Y",
+    "%Y-%m-%d %I:%M:%S %p",
+    "%Y-%m-%d %I:%M %p",
+    "%Y/%m/%d %I:%M:%S %p",
+    "%Y/%m/%d %I:%M %p",
+    "%Y-%m-%d %H:%M:%S",
+    "%Y-%m-%d %H:%M",
+    "%Y/%m/%d %H:%M:%S",
+    "%Y/%m/%d %H:%M",
+    "%m/%d/%Y %I:%M:%S %p",
+    "%m/%d/%Y %I:%M %p",
+    "%m/%d/%y %I:%M:%S %p",
+    "%m/%d/%y %I:%M %p",
+    "%m-%d-%Y %I:%M:%S %p",
+    "%m-%d-%Y %I:%M %p",
+    "%m-%d-%y %I:%M:%S %p",
+    "%m-%d-%y %I:%M %p",
+    "%Y-%m-%dT%H:%M:%S",
+    "%Y-%m-%dT%H:%M:%S.%f",
+)
+
+DATE_CANDIDATE_PATTERNS = (
+    re.compile(
+        r"\b\d{4}[./-]\d{1,2}[./-]\d{1,2}(?:[ T]\d{1,2}:\d{2}(?::\d{2})?\s*(?:[AaPp][Mm])?)?\b"
+    ),
+    re.compile(
+        r"\b[0-9A-Za-z]{1,2}[./-][0-9A-Za-z]{1,2}[./-][0-9A-Za-z]{2,4}"
+        r"(?:\s+\d{1,2}:\d{2}(?::\d{2})?\s*(?:[AaPp][Mm])?)?\b"
+    ),
+    re.compile(
+        r"\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec"
+        r"|January|February|March|April|June|July|August|September|October|November|December)"
+        r"\s+\d{1,2},?\s+\d{2,4}(?:\s+\d{1,2}:\d{2}(?::\d{2})?\s*(?:[AaPp][Mm])?)?\b",
+        flags=re.IGNORECASE,
+    ),
+    re.compile(
+        r"\b\d{1,2}\s+"
+        r"(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec"
+        r"|January|February|March|April|June|July|August|September|October|November|December)"
+        r",?\s+\d{2,4}(?:\s+\d{1,2}:\d{2}(?::\d{2})?\s*(?:[AaPp][Mm])?)?\b",
+        flags=re.IGNORECASE,
+    ),
+    re.compile(r"\b\d{1,2}[A-Za-z]{3}\d{2,4}\b"),
+    re.compile(r"\b\d{8}\b"),
+)
+
+OCR_DIGIT_TRANSLATION = str.maketrans(
+    {
+        "O": "0",
+        "o": "0",
+        "I": "1",
+        "l": "1",
+        "S": "5",
+        "s": "5",
+        "B": "8",
+    }
+)
 
 MONEY_REVIEW_KEYS = {
     "amount",
@@ -129,14 +217,80 @@ def _normalize_label(label: str) -> str:
     return re.sub(r"[^a-z0-9]+", "_", label.lower()).strip("_")
 
 
-def _format_date(value: str, output_format: str) -> str:
-    for fmt in DATE_INPUT_FORMATS:
+def _clean_date_candidate(value: str) -> str:
+    cleaned = value.strip()
+    cleaned = re.sub(r"^[A-Za-z][A-Za-z\s]{0,24}:\s*", "", cleaned)
+    cleaned = re.sub(r"\bAT\b", " ", cleaned, flags=re.IGNORECASE)
+    cleaned = re.sub(r"\s+", " ", cleaned).strip()
+    cleaned = re.sub(r"\b(?:UTC|GMT|[ECMP][SD]T|PST|PDT|CST|CDT|MST|MDT|EST|EDT)$", "", cleaned).strip()
+    return cleaned
+
+
+def _normalize_ocr_digits(value: str) -> str:
+    token = value.strip()
+    match = re.match(
+        r"^(?P<date>[0-9A-Za-z]{1,2}[./-][0-9A-Za-z]{1,2}[./-][0-9A-Za-z]{2,4})"
+        r"(?P<time>\s+\d{1,2}:\d{2}(?::\d{2})?\s*(?:[AaPp][Mm])?)?$",
+        token,
+    )
+    if not match:
+        return token
+    date_part = match.group("date")
+    time_part = match.group("time") or ""
+    separator = next((sep for sep in ("/", "-", ".") if sep in date_part), "/")
+    normalized_parts = [part.translate(OCR_DIGIT_TRANSLATION) for part in date_part.split(separator)]
+    return f"{separator.join(normalized_parts)}{time_part}".strip()
+
+
+def _parse_datetime_candidate(value: str) -> datetime | None:
+    for fmt in DATE_PARSE_FORMATS:
         try:
-            parsed = datetime.strptime(value, fmt)
-            return parsed.strftime(output_format)
+            return datetime.strptime(value, fmt)
         except ValueError:
             continue
+    return None
+
+
+def _iter_date_candidates(raw_value: str) -> list[str]:
+    candidates: list[str] = [raw_value]
+    for pattern in DATE_CANDIDATE_PATTERNS:
+        for match in pattern.finditer(raw_value):
+            candidate = match.group(0).strip()
+            if candidate:
+                candidates.append(candidate)
+
+    seen: set[str] = set()
+    ordered: list[str] = []
+    for candidate in candidates:
+        normalized = candidate.strip()
+        if not normalized or normalized in seen:
+            continue
+        seen.add(normalized)
+        ordered.append(normalized)
+    return ordered
+
+
+def _format_date(value: str, output_format: str) -> str:
+    for raw_candidate in _iter_date_candidates(value):
+        for candidate in (_clean_date_candidate(raw_candidate), _normalize_ocr_digits(_clean_date_candidate(raw_candidate))):
+            parsed = _parse_datetime_candidate(candidate)
+            if parsed is not None:
+                return parsed.strftime(output_format)
     return value
+
+
+def normalize_date_string(value: object, output_format: str) -> str:
+    """Normalize an arbitrary date string to a target output format when possible."""
+    if value is None:
+        return ""
+    if isinstance(value, datetime):
+        return value.strftime(output_format)
+    if isinstance(value, date):
+        return datetime(value.year, value.month, value.day).strftime(output_format)
+    text = str(value).strip()
+    if not text:
+        return ""
+    return _format_date(text, output_format)
 
 
 def _format_value(field: str, value: object, hints: TemplateHints) -> str:
@@ -145,8 +299,7 @@ def _format_value(field: str, value: object, hints: TemplateHints) -> str:
     if isinstance(value, bool):
         return "true" if value else "false"
     if field == "transaction_date":
-        date_text = str(value).strip()
-        return _format_date(date_text, hints.date_output_format) if date_text else ""
+        return normalize_date_string(value, hints.date_output_format)
     if isinstance(value, (int, float)):
         if field in MONEY_FIELDS:
             amount = f"{float(value):.2f}"

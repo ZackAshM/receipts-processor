@@ -166,6 +166,7 @@ def test_pipeline_emits_run_status_and_progress_events(
         example_file=example_file,
         output_file=output_file,
         log_dir=tmp_path / "logs",
+        enable_llm=False,
         status_handler=status_events.append,
         progress_handler=progress_events.append,
     )

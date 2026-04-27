@@ -25,6 +25,7 @@ from receipt_processor.io.template_renderer import (
     collect_template_tokens,
     has_keyword_placeholders,
     infer_required_review_fields,
+    normalize_date_string,
     render_rows_from_model_template,
 )
 from receipt_processor.llm.config import LLMInputMode, LLMSettings, load_llm_settings
@@ -137,6 +138,7 @@ STATEMENT_FILENAME_HINTS = (
 MAX_STATEMENT_CONTEXT_FILES = 3
 MAX_STATEMENT_CONTEXT_CHARS = 2200
 MAX_NOTE_CONTEXT_CHARS = 1800
+STANDARD_OUTPUT_DATE_FORMAT = "%Y/%m/%d"
 LLM_CIRCUIT_BREAKER_FAILURE_STREAK = 3
 LLM_PROVIDER_FAILURE_HINTS = (
     "status=429",
@@ -340,7 +342,10 @@ def _apply_resolved_fields(
         if key == "vendor":
             extracted["merchant_name"] = value
         elif key == "date":
-            extracted["transaction_date"] = value
+            extracted["transaction_date"] = normalize_date_string(
+                value,
+                STANDARD_OUTPUT_DATE_FORMAT,
+            )
         elif key == "amount":
             try:
                 extracted["amount_paid"] = float(value.replace("$", "").replace(",", ""))
@@ -351,6 +356,11 @@ def _apply_resolved_fields(
                 value,
                 context_text=str(extracted.get("merchant_name", "")).strip(),
             )
+
+    extracted["transaction_date"] = normalize_date_string(
+        extracted.get("transaction_date", ""),
+        STANDARD_OUTPUT_DATE_FORMAT,
+    )
 
 
 def _recompute_contradictions_after_resolution(
@@ -483,6 +493,7 @@ def run_pipeline(
 
     model_columns = load_model_columns(model_file)
     template_hints = infer_template_hints(model_file, example_file)
+    template_hints = replace(template_hints, date_output_format=STANDARD_OUTPUT_DATE_FORMAT)
 
     accepted_keyword_rows: list[dict[str, object]] = []
     accepted_processed_rows: list[dict[str, object]] = []
@@ -578,6 +589,10 @@ def run_pipeline(
                 llm_context=llm_context,
             )
             extracted = llm_result.extracted
+            extracted["transaction_date"] = normalize_date_string(
+                extracted.get("transaction_date", ""),
+                STANDARD_OUTPUT_DATE_FORMAT,
+            )
             extraction_mode = llm_result.extraction_mode
             extraction_details = {
                 "extraction_mode": llm_result.extraction_mode,
@@ -870,6 +885,10 @@ def run_pipeline(
                 extracted["merchant_name"] = parsed["vendor"]
             if not extracted.get("transaction_date") and parsed.get("date"):
                 extracted["transaction_date"] = parsed["date"]
+            extracted["transaction_date"] = normalize_date_string(
+                extracted.get("transaction_date", ""),
+                STANDARD_OUTPUT_DATE_FORMAT,
+            )
             if (
                 parsed.get("expense_type")
                 and str(extracted.get("transaction_type", "")).strip() in {"", "Misc"}

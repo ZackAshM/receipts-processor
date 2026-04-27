@@ -5,6 +5,7 @@ import pytest
 from receipt_processor.io.template_loader import TemplateHints
 from receipt_processor.io.template_renderer import (
     infer_required_review_fields,
+    normalize_date_string,
     render_rows_from_model_template,
 )
 
@@ -104,3 +105,11 @@ def test_infer_required_review_fields_without_keyword_placeholders_is_empty() ->
 
     required = infer_required_review_fields(model_columns=model_columns, model_rows=model_rows)
     assert required == set()
+
+
+def test_normalize_date_string_handles_diverse_datetime_inputs() -> None:
+    output_format = "%Y/%m/%d"
+    assert normalize_date_string("08/18/25 9:53:20 AM", output_format) == "2025/08/18"
+    assert normalize_date_string("Date: 8/22/2025, 3:42 AM", output_format) == "2025/08/22"
+    assert normalize_date_string("22AUG25", output_format) == "2025/08/22"
+    assert normalize_date_string("DATE B/22/25", output_format) == "2025/08/22"

@@ -78,7 +78,7 @@ def test_pipeline_uses_notes_for_missing_fields(tmp_path: Path) -> None:
     )
 
     rows = _read_csv_rows(output)
-    assert rows[0]["Date"] == "2025 06 25"
+    assert rows[0]["Date"] == "2025/06/25"
     assert rows[0]["Description"] == "Transportation - Lyft"
     assert rows[0]["Amt Claimed (USD)"] == "$54.91"
 

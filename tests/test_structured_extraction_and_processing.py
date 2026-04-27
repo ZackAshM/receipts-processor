@@ -30,8 +30,10 @@ def test_structured_extractor_uses_highlighted_items_as_contributing() -> None:
     processed = process_structured_data(extracted)
 
     assert extracted["has_highlighted_contributions"] is True
-    assert extracted["contributing_items_count"] == 1
-    assert extracted["noncontributing_items_count"] == 1
+    assert "contributing_items" not in extracted
+    assert "noncontributing_items" not in extracted
+    assert processed["contributing_items_count"] == 1
+    assert processed["noncontributing_items_count"] == 1
     assert processed["true_expense"] < processed["receipt_expense"]
     assert processed["receipt_amount_if_different"] == processed["receipt_expense"]
 
@@ -53,21 +55,17 @@ def test_structured_extractor_defaults_all_items_to_contributing_without_highlig
     )
 
     extracted = extract_structured_data(receipt_path=Path("receipt2.png"), document=document)
+    processed = process_structured_data(extracted)
     assert extracted["has_highlighted_contributions"] is False
-    assert extracted["contributing_items_count"] == 2
-    assert extracted["noncontributing_items_count"] == 0
+    assert processed["contributing_items_count"] == 2
+    assert processed["noncontributing_items_count"] == 0
 
 
 def test_receipt_amount_if_different_is_empty_when_amounts_match() -> None:
     extracted = {
         "transaction_type": "Food",
         "merchant_name": "Cafe",
-        "contributing_items_total": 12.34,
-        "noncontributing_items_total": 0.0,
-        "contributing_items_count": 1,
-        "noncontributing_items_count": 0,
-        "contributing_items": [{"name": "Meal", "amount": 12.34}],
-        "noncontributing_items": [],
+        "line_items": [{"name": "Meal", "amount": 12.34, "is_highlighted": False}],
         "used_keywords": {},
         "confidence": 0.9,
         "needs_review": False,
@@ -103,3 +101,77 @@ def test_structured_extractor_prefers_rightmost_amount_in_tax_like_lines() -> No
     assert extracted["amount_paid"] == 14.74
     assert processed["subtotal"] == 13.6
     assert processed["true_expense"] == 14.74
+
+
+def test_processing_does_not_subtract_tax_like_noncontributing_items() -> None:
+    extracted = {
+        "transaction_type": "Food",
+        "merchant_name": "Sample",
+        "line_items": [
+            {"name": "Meal", "amount": 13.60, "is_highlighted": True},
+            {"name": "Tax", "amount": 1.14, "is_highlighted": False},
+        ],
+        "used_keywords": {},
+        "confidence": 0.9,
+        "needs_review": False,
+        "amount_paid": 14.74,
+        "subtotal": None,
+        "tax": 1.14,
+        "tip": None,
+        "service_charge": None,
+        "pre_tip_total": None,
+    }
+
+    processed = process_structured_data(extracted)
+    assert processed["true_expense"] == 14.74
+    assert processed["receipt_amount_if_different"] is None
+
+
+def test_processing_reconciles_to_amount_paid_when_line_items_match_amount() -> None:
+    extracted = {
+        "transaction_type": "Transportation",
+        "merchant_name": "Ride Share",
+        "line_items": [
+            {"name": "Trip fare", "amount": 33.91, "is_highlighted": True},
+            {"name": "Tips", "amount": 6.48, "is_highlighted": False},
+            {"name": "Uber One Credits", "amount": -1.51, "is_highlighted": False},
+        ],
+        "used_keywords": {},
+        "confidence": 0.9,
+        "needs_review": False,
+        "amount_paid": 38.88,
+        "subtotal": 22.06,
+        "tax": None,
+        "tip": 6.48,
+        "service_charge": None,
+        "pre_tip_total": None,
+    }
+
+    processed = process_structured_data(extracted)
+    assert processed["receipt_expense"] == 38.88
+    assert processed["true_expense"] == 38.88
+    assert processed["receipt_amount_if_different"] is None
+
+
+def test_processing_does_not_create_noncontributing_without_highlights() -> None:
+    extracted = {
+        "transaction_type": "Food",
+        "merchant_name": "Cafe",
+        "line_items": [
+            {"name": "Sandwich", "amount": 10.0, "is_highlighted": False},
+            {"name": "Tax", "amount": 0.8, "is_highlighted": False},
+        ],
+        "amount_paid": 10.8,
+        "subtotal": 10.0,
+        "tax": 0.8,
+        "tip": None,
+        "service_charge": None,
+        "pre_tip_total": None,
+        "used_keywords": {},
+        "confidence": 0.9,
+        "needs_review": False,
+    }
+
+    processed = process_structured_data(extracted)
+    assert processed["contributing_items_count"] == 2
+    assert processed["noncontributing_items_count"] == 0
