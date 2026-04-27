@@ -261,6 +261,31 @@ class LLMExtractionService:
                     raise LLMUnsupportedInputError(
                         f"unsupported_file_type_for_direct_mode:{receipt_path.suffix.lower() or 'unknown'}"
                     )
+                try:
+                    file_size = int(receipt_path.stat().st_size)
+                except OSError:
+                    file_size = 0
+                if file_size > int(self.settings.max_file_bytes):
+                    try:
+                        response = self._attempt_text_mode(
+                            client=client,
+                            receipt_path=receipt_path,
+                            document=document,
+                            llm_context=llm_context,
+                        )
+                        used_mode = LLMInputMode.text.value
+                        return LLMAttemptResult(
+                            attempted=True,
+                            success=True,
+                            requested_mode=requested_mode,
+                            used_mode=used_mode,
+                            response=response,
+                        )
+                    except LLMProviderError as text_exc:
+                        raise LLMProviderError(
+                            "file_too_large_then_text_failed:"
+                            f"{file_size}>{int(self.settings.max_file_bytes)} | {str(text_exc)}"
+                        ) from text_exc
                 context_text = self._render_context_text(
                     llm_context,
                     max_chars=max(500, int(self.settings.max_input_chars * 0.35)),

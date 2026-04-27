@@ -16,11 +16,11 @@ class LLMInputMode(str, Enum):
 
     @classmethod
     def parse(cls, raw: str | None) -> "LLMInputMode":
-        candidate = (raw or "").strip().lower() or cls.auto.value
+        candidate = (raw or "").strip().lower() or cls.text.value
         try:
             return cls(candidate)
         except ValueError:
-            return cls.auto
+            return cls.text
 
 
 def _parse_bool(raw: str | None, default: bool = False) -> bool:
@@ -56,19 +56,20 @@ def _parse_int(raw: str | None, default: int) -> int:
 class LLMSettings:
     """Resolved LLM settings from environment variables."""
 
-    enabled: bool = False
+    enabled: bool = True
     api_key: str = ""
-    model: str = "google/gemini-2.5-flash"
-    input_mode: LLMInputMode = LLMInputMode.auto
+    model: str = "openrouter/free"
+    input_mode: LLMInputMode = LLMInputMode.text
     base_url: str = "https://openrouter.ai/api/v1"
     app_referer: str = ""
     app_title: str = "ReceiptProcessor"
     pdf_engine: str = ""
     timeout_seconds: float = 30.0
     max_input_chars: int = 12000
+    max_file_bytes: int = 5_000_000
     input_cost_per_1k_tokens: float | None = None
     output_cost_per_1k_tokens: float | None = None
-    enable_exception_assist: bool = False
+    enable_exception_assist: bool = True
 
     @property
     def has_api_key(self) -> bool:
@@ -86,15 +87,16 @@ class LLMSettings:
             "pdf_engine": self.pdf_engine,
             "timeout_seconds": self.timeout_seconds,
             "max_input_chars": self.max_input_chars,
+            "max_file_bytes": self.max_file_bytes,
             "has_api_key": self.has_api_key,
         }
 
 
 def load_llm_settings() -> LLMSettings:
     """Load optional LLM settings from process environment."""
-    enabled = _parse_bool(os.environ.get("ENABLE_LLM"), default=False)
+    enabled = _parse_bool(os.environ.get("ENABLE_LLM"), default=True)
     api_key = os.environ.get("OPENROUTER_API_KEY", "").strip()
-    model = os.environ.get("OPENROUTER_MODEL", "").strip() or "google/gemini-2.5-flash"
+    model = os.environ.get("OPENROUTER_MODEL", "").strip() or "openrouter/free"
     input_mode = LLMInputMode.parse(os.environ.get("LLM_INPUT_MODE"))
     base_url = os.environ.get("OPENROUTER_BASE_URL", "").strip() or "https://openrouter.ai/api/v1"
     app_referer = os.environ.get("OPENROUTER_HTTP_REFERER", "").strip()
@@ -102,12 +104,13 @@ def load_llm_settings() -> LLMSettings:
     pdf_engine = os.environ.get("OPENROUTER_PDF_ENGINE", "").strip()
     timeout_seconds = max(1.0, _parse_float(os.environ.get("LLM_TIMEOUT_SECONDS"), 30.0))
     max_input_chars = max(2000, _parse_int(os.environ.get("LLM_MAX_INPUT_CHARS"), 12000))
+    max_file_bytes = max(500_000, _parse_int(os.environ.get("LLM_MAX_FILE_BYTES"), 5_000_000))
 
     input_cost = os.environ.get("OPENROUTER_INPUT_COST_PER_1K_TOKENS", "").strip()
     output_cost = os.environ.get("OPENROUTER_OUTPUT_COST_PER_1K_TOKENS", "").strip()
     enable_exception_assist = _parse_bool(
         os.environ.get("ENABLE_LLM_EXCEPTION_ASSIST"),
-        default=False,
+        default=True,
     )
     input_cost_value = _parse_float(input_cost, -1.0) if input_cost else None
     output_cost_value = _parse_float(output_cost, -1.0) if output_cost else None
@@ -127,6 +130,7 @@ def load_llm_settings() -> LLMSettings:
         pdf_engine=pdf_engine,
         timeout_seconds=timeout_seconds,
         max_input_chars=max_input_chars,
+        max_file_bytes=max_file_bytes,
         input_cost_per_1k_tokens=input_cost_value,
         output_cost_per_1k_tokens=output_cost_value,
         enable_exception_assist=enable_exception_assist,

@@ -9,6 +9,7 @@ from receipt_processor.review.models import ReviewField, ReviewOption, ReviewReq
 class _AssistClient:
     def __init__(self, payload: dict[str, object]) -> None:
         self.payload = payload
+        self.calls = 0
 
     def assist_review_resolution(
         self,
@@ -16,6 +17,7 @@ class _AssistClient:
         model: str,
         review_payload: dict[str, object],
     ) -> LLMExtractionResponse:
+        self.calls += 1
         return LLMExtractionResponse(
             payload=dict(self.payload),
             usage=LLMUsage(total_tokens=22),
@@ -130,3 +132,47 @@ def test_review_assist_can_resolve_without_confidence_threshold() -> None:
     assert result.resolved is True
     assert result.decision is not None
     assert result.decision.resolved_fields["vendor"] == "BURGERSHACK"
+
+
+def test_review_assist_skips_numeric_decisions_for_user() -> None:
+    request = ReviewRequest(
+        issue_type="contradiction_detected",
+        title="Amount Contradiction",
+        message="Choose one amount.",
+        receipt_filename="receipt.png",
+        fields=[
+            ReviewField(
+                name="amount",
+                display_name="Amount",
+                options=[
+                    ReviewOption(source="file", value="$12.50"),
+                    ReviewOption(source="filename", value="12.30"),
+                    ReviewOption(source="notes", value="(13.00)"),
+                ],
+            )
+        ],
+    )
+    client = _AssistClient(
+        {
+            "action": "resolve",
+            "confidence": 0.95,
+            "resolved_fields": {"amount": "$12.50"},
+            "reason": "irrelevant",
+        }
+    )
+    result = attempt_llm_review_resolution(
+        request=request,
+        source_fields={
+            "file": {"amount": "$12.50"},
+            "filename": {"amount": "12.30"},
+            "notes": {"amount": "(13.00)"},
+        },
+        receipt_filename="receipt.png",
+        settings=_settings(enabled=True, assist=True),
+        client=client,
+    )
+
+    assert result.attempted is False
+    assert result.resolved is False
+    assert result.reason == "numeric_decisions_require_user"
+    assert client.calls == 0

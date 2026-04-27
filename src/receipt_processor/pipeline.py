@@ -29,6 +29,7 @@ from receipt_processor.io.template_renderer import (
     render_rows_from_model_template,
 )
 from receipt_processor.llm.config import LLMInputMode, LLMSettings, load_llm_settings
+from receipt_processor.llm.context_sanitizer import sanitize_statement_text
 from receipt_processor.llm.orchestrator import extract_with_optional_llm
 from receipt_processor.llm.review_assist import LLMReviewAssistResult, attempt_llm_review_resolution
 from receipt_processor.observability.runtime_logger import RuntimeLogger
@@ -66,6 +67,10 @@ def _detailed_sidecar_path(output_file: Path) -> Path:
     return output_file.with_name(f"{output_file.stem}_detailed.json")
 
 
+def _summary_sidecar_path(output_file: Path) -> Path:
+    return output_file.with_name(f"{output_file.stem}_summary.md")
+
+
 def _amount_to_text(value: object) -> str:
     if value is None:
         return ""
@@ -79,6 +84,93 @@ def _write_detailed_json(path: Path, payload: dict) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", encoding="utf-8") as handle:
         json.dump(payload, handle, ensure_ascii=True, indent=2, default=str)
+
+
+def _format_money(value: object) -> str:
+    try:
+        return f"${float(value):.2f}"
+    except (TypeError, ValueError):
+        return "-"
+
+
+def _safe_markdown_text(value: object) -> str:
+    text = str(value or "").strip()
+    if not text:
+        return "-"
+    return text.replace("|", "\\|").replace("\n", " ").replace("\r", " ")
+
+
+def _write_detailed_summary_markdown(path: Path, payload: dict[str, object]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    summary = payload.get("summary", {}) if isinstance(payload, dict) else {}
+    receipts = payload.get("receipts", []) if isinstance(payload, dict) else []
+
+    lines: list[str] = []
+    lines.append("# ReceiptProcessor Summary")
+    lines.append("")
+    lines.append("## Run")
+    lines.append(f"- Generated (UTC): {_safe_markdown_text(payload.get('generated_at_utc'))}")
+    lines.append(f"- Input Dir: {_safe_markdown_text(payload.get('input_dir'))}")
+    lines.append(f"- Output File: {_safe_markdown_text(payload.get('output_file'))}")
+    lines.append("")
+    lines.append("## Totals")
+    lines.append(f"- Processed Receipts: {_safe_markdown_text(summary.get('processed_count'))}")
+    lines.append(f"- Flagged Receipts: {_safe_markdown_text(summary.get('flagged_count'))}")
+    lines.append(f"- Total Expenses: {_format_money(summary.get('total_expenses'))}")
+    lines.append(f"- Total Receipt Expenses: {_format_money(summary.get('total_receipt_expenses'))}")
+    lines.append(f"- Review Count: {_safe_markdown_text(summary.get('review_count'))}")
+    lines.append("")
+    lines.append("## Receipts")
+    lines.append(
+        "| Filename | Status | Merchant | Date | True Expense | Receipt Expense | Needs Review | Issue | Extraction |"
+    )
+    lines.append("|---|---|---|---|---:|---:|---|---|---|")
+
+    if isinstance(receipts, list):
+        for receipt in receipts:
+            if not isinstance(receipt, dict):
+                continue
+            extracted = receipt.get("extracted", {})
+            processed = receipt.get("processed", {})
+            extraction = receipt.get("extraction", {})
+            issue = receipt.get("issue_type", "")
+            if not issue:
+                blocking = receipt.get("blocking_contradictions", [])
+                if isinstance(blocking, list) and blocking:
+                    issue = "; ".join(str(item) for item in blocking if str(item).strip())
+            lines.append(
+                "| "
+                + " | ".join(
+                    [
+                        _safe_markdown_text(receipt.get("filename")),
+                        _safe_markdown_text(receipt.get("status")),
+                        _safe_markdown_text(
+                            extracted.get("merchant_name") if isinstance(extracted, dict) else ""
+                        ),
+                        _safe_markdown_text(
+                            extracted.get("transaction_date") if isinstance(extracted, dict) else ""
+                        ),
+                        _format_money(
+                            processed.get("true_expense") if isinstance(processed, dict) else None
+                        ),
+                        _format_money(
+                            processed.get("receipt_expense") if isinstance(processed, dict) else None
+                        ),
+                        _safe_markdown_text(
+                            processed.get("needs_review") if isinstance(processed, dict) else ""
+                        ),
+                        _safe_markdown_text(issue),
+                        _safe_markdown_text(
+                            extraction.get("extraction_mode") if isinstance(extraction, dict) else ""
+                        ),
+                    ]
+                )
+                + " |"
+            )
+    lines.append("")
+    lines.append("_Generated for readability from Expenses_detailed.json._")
+
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
 def _resolve_llm_settings(
@@ -183,7 +275,10 @@ def _collect_statement_context(receipt_files: list[Path]) -> list[dict[str, str]
         if not _looks_like_statement(path):
             continue
         extracted = extract_document(path)
-        compact_text = " ".join((extracted.raw_text or "").split()).strip()
+        compact_text = sanitize_statement_text(
+            extracted.raw_text or "",
+            max_chars=MAX_STATEMENT_CONTEXT_CHARS,
+        )
         if not compact_text:
             continue
         context_rows.append(
@@ -1212,7 +1307,10 @@ def run_pipeline(
         },
         "receipts": detailed_receipts,
     }
-    _write_detailed_json(_detailed_sidecar_path(output_file), detailed_payload)
+    detailed_output_path = _detailed_sidecar_path(output_file)
+    summary_output_path = _summary_sidecar_path(output_file)
+    _write_detailed_json(detailed_output_path, detailed_payload)
+    _write_detailed_summary_markdown(summary_output_path, detailed_payload)
 
     logger.emit(
         "run_completed",
@@ -1222,6 +1320,7 @@ def run_pipeline(
             "duration_ms": round((perf_counter() - run_started) * 1000, 2),
             "output_file": output_file.name,
             "exception_output_file": exception_output_path.name,
-            "detailed_output_file": _detailed_sidecar_path(output_file).name,
+            "detailed_output_file": detailed_output_path.name,
+            "summary_output_file": summary_output_path.name,
         },
     )

@@ -462,6 +462,34 @@ def test_file_mode_pdf_can_fallback_to_text_input(tmp_path: Path) -> None:
     assert client.text_calls == 1
 
 
+def test_file_mode_respects_max_file_bytes_and_falls_back_to_text(tmp_path: Path) -> None:
+    receipt = tmp_path / "large_receipt.png"
+    receipt.write_bytes(b"x" * 4000)
+    document = DocumentExtraction(raw_text="Merchant Cafe Amount Paid 8.75", ocr_lines=[], highlight_detection_available=False)
+    deterministic = _base_extracted(receipt.name)
+    client = _SuccessfulClient({"merchant_name": "Cafe", "amount_paid": 8.75})
+    settings = LLMSettings(
+        enabled=True,
+        api_key="test-key",
+        model="gpt-test",
+        input_mode=LLMInputMode.file,
+        max_file_bytes=1000,
+    )
+
+    result = extract_with_optional_llm(
+        receipt_path=receipt,
+        document=document,
+        deterministic_extracted=deterministic,
+        settings=settings,
+        client=client,
+    )
+
+    assert result.extraction_mode == "llm"
+    assert result.llm_used_mode == "text"
+    assert client.file_calls == 0
+    assert client.text_calls == 1
+
+
 def test_text_mode_retries_transient_provider_failures(tmp_path: Path, monkeypatch) -> None:
     receipt = tmp_path / "receipt.png"
     receipt.write_bytes(b"png")

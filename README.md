@@ -20,7 +20,7 @@ I am building a receipt-to-expense pipeline that:
 - Deterministic structured extraction layer (document metadata, totals, itemization, keyword evidence).
 - Deterministic processing layer (for derived fields like `true_expense`, `receipt_expense`, and `receipt_amount_if_different`).
 - Canonical transaction types constrained to `Food`, `Transportation`, `Lodging`, `Misc`.
-- Optional LLM semantic extraction layer (default off) with deterministic fallback on any failure.
+- Optional LLM semantic extraction layer (enabled by default, with deterministic fallback on any failure).
 - Model-driven template rendering via placeholders (`{{keyword}}`) and run-level operations (`<operation>`).
 - Model/example-driven output shaping (for date/currency formatting hints).
 - Automatic summary row generation (`Total:`) aligned to template columns.
@@ -63,7 +63,7 @@ receipts_processor data/inbox \
   --risk-controls-file configs/risk_controls.yaml
 ```
 
-If you do not enable LLM, the app runs fully in deterministic mode by default.
+If LLM is disabled, unavailable, misconfigured, or fails at runtime, the app continues in deterministic mode.
 
 ## Usage Guide (For End Users)
 
@@ -139,10 +139,11 @@ cp .env.example .env
 
 2. Edit `.env` and set:
 - `ENABLE_LLM=true`
-- `ENABLE_LLM_EXCEPTION_ASSIST=false|true` (default `false`)
+- `ENABLE_LLM_EXCEPTION_ASSIST=true|false` (default `true`)
 - `OPENROUTER_API_KEY=<your private token>`
-- `OPENROUTER_MODEL=<model slug>`
-- `LLM_INPUT_MODE=text|file|auto`
+- `OPENROUTER_MODEL=<model slug>` (default `openrouter/free`)
+- `LLM_INPUT_MODE=text|file|auto` (default `text`)
+- `LLM_MAX_FILE_BYTES=<max direct-file bytes for LLM file mode>` (default `5000000`)
 
 3. Run normally. The CLI/GUI automatically load `.env` from the current working directory.
    Exported shell variables still take precedence over `.env` values.
@@ -160,15 +161,15 @@ cp .env.example .env
   - `LLM Input Mode Override` (`env`, `auto`, `file`, `text`)
 
 Input modes:
-- `auto` (default): attempt direct file input for image/PDF receipts, then fallback to OCR/local text input if needed.
+- `text` (default): extract text locally first (with OCR fallback checks) and send text to LLM.
 - `file`: force direct file input first, then fallback to OCR/local text input if the model/provider cannot use that file mode.
-- `text`: extract text locally first (with OCR fallback checks) and send text to LLM.
+- `auto`: attempt direct file input for image/PDF receipts, then fallback to OCR/local text input if needed.
 
 LLM extraction context includes:
 - receipt filename
 - receipt file or extracted text
 - matched notes context (`notes.txt`, `<receipt>_notes.txt`, etc.)
-- detected statement context from bank/credit statement-like files in the same input folder
+- sanitized statement context from bank/credit statement-like files in the same input folder
 
 If LLM is misconfigured/unavailable/fails, the app automatically falls back to deterministic extraction and continues output generation.
 
@@ -176,6 +177,7 @@ Optional exception assist behavior:
 - When enabled, the LLM gets a first conservative attempt to resolve obvious contradiction/low-confidence choices from provided options.
 - If the LLM returns `abstain` (not obvious) or invalid/ambiguous option output, the pipeline reports the assist fallback and routes to user review.
 - If LLM extraction for a receipt already failed due provider/API instability, exception assist is skipped for that receipt to avoid duplicate failing calls.
+- Number-based review choices are always routed to user review (LLM exception assist does not auto-resolve numeric options).
 - The run never hard-depends on exception assist; existing review and exception flows remain authoritative.
 - At run start, CLI/GUI report whether the run is deterministic or LLM-supported, plus model/flag summary.
 - Progress is surfaced per receipt as `<filename> [x% / 100%]`.
@@ -186,6 +188,7 @@ Optional exception assist behavior:
 - Main export: `Expenses.csv` (or `.xlsx` if you choose that extension)
 - Flagged records: `Expenses_exceptions.csv`
 - Detailed extraction + processing sidecar: `Expenses_detailed.json`
+- User-friendly detailed summary sidecar: `Expenses_summary.md`
 - Runtime performance/debug logs: `logs/performance-YYYY-MM-DD.jsonl`
 
 ## Product Management Evidence

@@ -25,7 +25,9 @@ def test_pipeline_emits_single_detailed_json_with_summary(tmp_path: Path) -> Non
     )
 
     details_file = output.with_name("Expenses_detailed.json")
+    summary_file = output.with_name("Expenses_summary.md")
     assert details_file.exists()
+    assert summary_file.exists()
 
     payload = json.loads(details_file.read_text(encoding="utf-8"))
     assert "summary" in payload
@@ -35,6 +37,9 @@ def test_pipeline_emits_single_detailed_json_with_summary(tmp_path: Path) -> Non
     assert payload["receipts"][0]["filename"] == "lyft.png"
     assert "processed" in payload["receipts"][0]
     assert payload["summary"]["total_expenses"] >= 0
+    summary_text = summary_file.read_text(encoding="utf-8")
+    assert "# ReceiptProcessor Summary" in summary_text
+    assert "lyft.png" in summary_text
 
 
 def test_pipeline_removes_stale_exception_sidecar_when_no_current_exceptions(tmp_path: Path) -> None:

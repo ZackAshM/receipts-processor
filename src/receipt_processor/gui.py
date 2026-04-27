@@ -28,6 +28,11 @@ then reinstall this package in your environment.
 """
 
 
+def _manual_entry_became_non_empty(previous_text: str, current_text: str) -> bool:
+    """Return True when manual text transitions from empty to non-empty."""
+    return not str(previous_text or "").strip() and bool(str(current_text or "").strip())
+
+
 def _load_tk_modules() -> tuple[Any, Any, Any, Any]:
     """Import tkinter modules lazily so CLI use is unaffected."""
     try:
@@ -465,6 +470,7 @@ class ReceiptProcessorGUI:
 
         choice_var = tk.StringVar(value="manual" if not field.options else "")
         manual_var = tk.StringVar(value="")
+        previous_manual_text: dict[str, str] = {"value": ""}
 
         options_frame = ttk.Frame(container)
         options_frame.grid(row=4, column=0, sticky="ew")
@@ -488,6 +494,15 @@ class ReceiptProcessorGUI:
         ).grid(row=manual_row, column=0, sticky="w", pady=(8, 0))
         manual_entry = ttk.Entry(options_frame, textvariable=manual_var, width=56)
         manual_entry.grid(row=manual_row + 1, column=0, sticky="ew", pady=(4, 0))
+
+        def on_manual_change(*_args: object) -> None:
+            current = manual_var.get()
+            previous = previous_manual_text["value"]
+            if _manual_entry_became_non_empty(previous, current):
+                choice_var.set("manual")
+            previous_manual_text["value"] = current
+
+        manual_var.trace_add("write", on_manual_change)
 
         button_frame = ttk.Frame(container)
         button_frame.grid(row=5, column=0, sticky="e", pady=(12, 0))

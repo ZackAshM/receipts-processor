@@ -2230,3 +2230,130 @@ User 2026-04-26 23:48:15 CDT
 Ok, there seems to be an issue on the highlight flag.
 The LLM should not be determining if an item is highlighted. That should be up to the deterministic readers.
 And if the deterministic readers are currently finding highlights in any of the current receipts in the inbox, then something is wrong because there are not any highlights. Please investigate and fix this.
+
+Codex 2026-04-27 00:23:08 CDT
+Investigation complete and fixed.
+
+Findings:
+1. Deterministic readers are not falsely detecting highlights in your current inbox set.
+- I verified extraction directly: every current inbox receipt had `highlight_detection_available=False` and zero highlighted line items.
+
+Fixes made:
+1. LLM can no longer authoritatively set highlight flags.
+- LLM `line_items[].is_highlighted` is ignored.
+- Highlight flags are now projected from deterministic extraction only.
+- [schema.py](<REDACTED_PATH>)
+
+2. Processing now enforces deterministic highlight policy.
+- If `highlight_detection_available=False`, all line items are treated as contributing and noncontributing stays empty.
+- Highlight-based partitioning only happens when deterministic highlight detection is available.
+- [expense_processor.py](<REDACTED_PATH>)
+
+3. LLM prompt contract updated.
+- Removed highlight ownership from LLM output contract (line items now semantically extracted without highlight authority).
+- [openrouter_client.py](<REDACTED_PATH>)
+
+Tests:
+- Added regression tests for the highlight authority behavior and deterministic projection.
+- [test_llm_orchestrator.py](<REDACTED_PATH>)
+- [test_structured_extraction_and_processing.py](<REDACTED_PATH>)
+- Full suite passes: `97 passed`.
+
+Also updated and redacted [CODEX_LOG.md](<REDACTED_PATH>).
+
+User 2026-04-27 00:23:08 CDT
+<environment_context>
+  <shell>zsh</shell>
+  <current_date>2026-04-27</current_date>
+  <timezone>America/Chicago</timezone>
+</environment_context>
+
+User 2026-04-27 00:23:08 CDT
+Ok, after some review, I would like the following:
+
+1. Never let LLM exception handling cover number based decisions. Number choices (which may be a string of a number, so consider that) should always go to the user for decision.
+2. The possible inclusion of statement files may cause sensitive financial information to leak to LLMs. A sanitization of the statements (bank or credit card statements) should be performed whenever a statement file is detected. It should remove any detectable sensitive information that is not a transaction (only transactions are relevant to the app).
+3. There should be a configuration variable that represents a max size limit so that file upload to an LLM is constrained (to prevent high cost, high memory usage unintentionally)
+4. The details output is still difficult to read. A user-friendly / readable version should be made accessible. So output a third file with a compact summary of the detail file.
+5. Let the manual option in the GUI be automatically selected if it goes from empty to not empty (this particular switch prevents it from being permanently selected if there's something typed. We want to still allow a different choice to be pressed even if the box is not empty)
+6. Ensure that the default LLM input mode is "text" (this has been the most reliable) and the default model is "openrouter/free", and the default enable and assist enable are true
+
+User 2026-04-27 00:36:20 CDT
+Approved.
+
+Codex 2026-04-27 00:36:20 CDT
+Proceeding with the approved implementation batch. I will complete the remaining code and documentation updates, run tests, and report the exact changes and results.
+
+Codex 2026-04-27 00:38:02 CDT
+Implemented the approved batch end-to-end and verified it.
+
+Implemented
+- Enforced numeric-decision guard for LLM exception assist (numeric options always go to user): [review_assist.py](<REDACTED_PATH>)
+- Added statement sanitization module and wired it into LLM context collection: [context_sanitizer.py](<REDACTED_PATH>), [pipeline.py](<REDACTED_PATH>)
+- Added max file-size config for LLM file mode and file->text fallback when limit is exceeded: [config.py](<REDACTED_PATH>), [extractor.py](<REDACTED_PATH>)
+- Added user-friendly summary sidecar output (`Expenses_summary.md`) in addition to detailed JSON: [pipeline.py](<REDACTED_PATH>)
+- Implemented GUI manual auto-select only on empty->non-empty transition: [gui.py](<REDACTED_PATH>)
+- Updated defaults to your requested values (`enable=true`, `assist=true`, `model=openrouter/free`, `input_mode=text`) and documented `LLM_MAX_FILE_BYTES`: [.env.example](<REDACTED_PATH>), [README.md](<REDACTED_PATH>), [llm/README.md](<REDACTED_PATH>)
+
+Tests Added/Updated
+- LLM config defaults + max-file-bytes parsing/floor: [test_llm_config.py](<REDACTED_PATH>)
+- File-size fallback behavior: [test_llm_orchestrator.py](<REDACTED_PATH>)
+- Numeric exception-assist guard: [test_llm_review_assist.py](<REDACTED_PATH>)
+- Statement sanitization coverage: [test_statement_sanitizer.py](<REDACTED_PATH>)
+- Summary sidecar emission check: [test_detailed_json_output.py](<REDACTED_PATH>)
+- GUI manual transition behavior: [test_gui_manual_selection.py](<REDACTED_PATH>)
+
+Validation
+- Ran: `PYTHONPATH=src .venv/bin/python -m pytest -q`
+- Result: `106 passed in 2.11s`
+
+Log policy
+- Appended latest prior exchange to [CODEX_LOG.md](<REDACTED_PATH>) (append-only).
+- Ran redaction script on last 2000 lines: `scripts/redact_codex_log.py --lines 2000` (no additional replacements needed).
+
+User 2026-04-27 00:38:02 CDT
+Github found 1 failure in commit `0551da4`:
+```
+Run pip-audit -r requirements.lock.txt --progress-spinner off
+Found 1 known vulnerability in 1 package
+Name          Version ID             Fix Versions
+------------- ------- -------------- ------------
+python-dotenv 1.0.1   CVE-2026-28684 1.2.2
+Error: Process completed with exit code 1.
+```
+
+Please check if this is resolved, or needs to be resolved (for the current and future commits)
+
+Codex 2026-04-27 00:38:02 CDT
+Not resolved yet; it still needs to be fixed for current and future commits.
+
+Evidence:
+- [requirements.lock.txt:15](<REDACTED_PATH>) pins `python-dotenv==1.0.1`
+- [requirements.txt:11](<REDACTED_PATH>) allows `python-dotenv>=1.0.1`
+- [pyproject.toml:18](<REDACTED_PATH>) allows `python-dotenv>=1.0.1`
+- Local venv also has `python-dotenv 1.0.1` installed.
+
+So yes, this should be resolved by bumping to at least `1.2.2` and regenerating the lockfile (then CI `pip-audit` should pass for this CVE). I can apply that patch next if you want.
+
+User 2026-04-27 00:38:02 CDT
+Patch this.
+
+Codex 2026-04-27 00:45:51 CDT
+Patched.
+
+Updated dependency floor/pin to resolve `python-dotenv` CVE requirement:
+
+- [requirements.txt](<REDACTED_PATH>)
+  - `python-dotenv>=1.2.2`
+- [requirements.lock.txt](<REDACTED_PATH>)
+  - `python-dotenv==1.2.2`
+- [pyproject.toml](<REDACTED_PATH>)
+  - `python-dotenv>=1.2.2`
+
+Validation run:
+- `PYTHONPATH=src .venv/bin/python -m pytest -q` -> `106 passed`
+
+I did not run `pip-audit` locally in this venv because `pip-audit` is not installed here, but the lockfile and specifiers now match the fixed version (`1.2.2`).
+
+User 2026-04-27 00:45:51 CDT
+Ok, i've staged changes. Update codex log, stage it, and commit with an appropriate message

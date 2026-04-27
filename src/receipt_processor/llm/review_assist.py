@@ -20,6 +20,7 @@ SENSITIVE_PATTERN = re.compile(
     r"(sk-[A-Za-z0-9_-]{20,}|gh[pousr]_[A-Za-z0-9]{20,}|bearer\s+[A-Za-z0-9._~+/=-]{16,})",
     re.IGNORECASE,
 )
+NUMERIC_STRING_RE = re.compile(r"^[+-]?\d+(?:\.\d+)?$")
 
 
 @dataclass(frozen=True)
@@ -62,6 +63,33 @@ def _to_float(value: object) -> float | None:
         except ValueError:
             return None
     return None
+
+
+def _is_numeric_like(value: str) -> bool:
+    text = str(value or "").strip()
+    if not text:
+        return False
+    if not any(char.isdigit() for char in text):
+        return False
+
+    normalized = text.lower().strip()
+    normalized = re.sub(r"\b(?:usd|eur|gbp|cad|aud|chf|jpy)\b", "", normalized)
+    normalized = normalized.replace("$", "").replace("€", "").replace("£", "").replace("¥", "")
+    normalized = normalized.replace(",", "").replace(" ", "")
+    if normalized.startswith("(") and normalized.endswith(")"):
+        normalized = f"-{normalized[1:-1]}"
+    if normalized.endswith("%"):
+        normalized = normalized[:-1]
+
+    return bool(NUMERIC_STRING_RE.fullmatch(normalized))
+
+
+def _request_has_numeric_decision_options(request: ReviewRequest) -> bool:
+    for field in request.fields:
+        for option in field.options:
+            if _is_numeric_like(str(option.value or "")):
+                return True
+    return False
 
 
 def _build_request_payload(
@@ -177,6 +205,12 @@ def attempt_llm_review_resolution(
         )
     if not request.fields:
         return LLMReviewAssistResult(attempted=False, resolved=False, reason="no_review_fields")
+    if _request_has_numeric_decision_options(request):
+        return LLMReviewAssistResult(
+            attempted=False,
+            resolved=False,
+            reason="numeric_decisions_require_user",
+        )
 
     has_option_candidates = any(field.options for field in request.fields)
     if not has_option_candidates:
