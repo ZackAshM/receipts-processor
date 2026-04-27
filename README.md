@@ -65,6 +65,21 @@ receipts_processor data/inbox \
 
 If LLM is disabled, unavailable, misconfigured, or fails at runtime, the app continues in deterministic mode.
 
+## First-Time Setup Script
+
+For a fresh clone, you can run one interactive setup script:
+
+```bash
+python setup_project.py
+```
+
+The script will:
+- create `.venv` (if needed),
+- install dependencies and the app,
+- create/update `.env`,
+- ask whether to enable LLM support (and only ask LLM follow-up questions if enabled),
+- check for `tkinter` support and warn if GUI support may be unavailable.
+
 ## Usage Guide (For End Users)
 
 ### 1) Prepare your receipts folder

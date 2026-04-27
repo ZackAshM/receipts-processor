@@ -2357,3 +2357,127 @@ I did not run `pip-audit` locally in this venv because `pip-audit` is not instal
 
 User 2026-04-27 00:45:51 CDT
 Ok, i've staged changes. Update codex log, stage it, and commit with an appropriate message
+
+Codex 2026-04-27 00:54:47 CDT
+Updated `CODEX_LOG.md`, ran the redaction script on the last 2000 lines, staged it, and committed all staged changes.
+
+Commit:
+- `a9d4dc3`
+- `Add LLM safety controls and bump python-dotenv for CVE fix`
+
+User 2026-04-27 00:54:47 CDT
+Ok, let's make startup into a script. The intended goal is that someone clones the repo, then runs this script, and then is all set to run the app.
+This script should ask questions for the user to answer in order to determine default configuration and environment states. For example, one of the necessary options should be "Enable LLM Support for Data Extraction? (y/n)"
+
+Propose a script to me and what questions will be asked.
+
+Codex 2026-04-27 00:54:47 CDT
+Proposed Script
+I propose one interactive bootstrap script at `scripts/setup_project.py` (run with `python scripts/setup_project.py`).
+
+It will:
+1. Check Python version (`>=3.11`).
+2. Create `.venv` if missing.
+3. Install `requirements.lock.txt`.
+4. Install project in editable mode (`pip install -e .`).
+5. Create `.env` from `.env.example` (or update selected keys if `.env` exists).
+6. Create standard runtime dirs (`logs/`, `data/inbox/`, `data/output/` if missing).
+7. Optionally run a smoke test (`receipts_processor --help`).
+8. Print exact next commands to run CLI/GUI.
+
+Questions It Will Ask
+1. `Enable LLM support for data extraction? (y/n)`
+2. `Enable LLM exception assist? (y/n)`
+3. `OpenRouter model to use?` (default: `openrouter/free`)
+4. `LLM input mode? (text/file/auto)` (default: `text`)
+5. `Set LLM max file bytes for direct file mode?` (default: `5000000`)
+6. `Path for logs directory?` (default: `logs`)
+7. `Use default risk controls file configs/risk_controls.yaml? (y/n)`
+8. `Run smoke test now? (y/n)`
+
+If LLM is enabled, it will also ask:
+9. `Enter OPENROUTER_API_KEY now? (y/n)`
+10. If yes: secure prompt for key input (not echoed), then writes to `.env`.
+
+Output
+- Ready-to-run environment and config for this machine.
+- A final summary of chosen defaults.
+- A copy/paste run command.
+
+If you approve, I’ll implement this script and add a brief README section for “first-time setup in one command.”
+
+User 2026-04-27 00:54:47 CDT
+Remove the expection assist question. remove the input mode question. remove the max bytes question. remove the logs directory question. remove the risk controls question. remove the smoke test now question.
+Ensure the subsequent LLM questions are only asked if LLM support was chosen to be enabled.
+Include a check for tkinter and surface a warning that the GUI may not work properly if tkinter support is not detected.
+
+Codex 2026-04-27 00:59:25 CDT
+Perfect, updated proposal:
+
+Script
+- `scripts/setup_project.py` (interactive bootstrap)
+
+What it does
+1. Verify Python `>=3.11`
+2. Create `.venv` if missing
+3. Install `requirements.lock.txt`
+4. Install app (`pip install -e .`)
+5. Create/update `.env` from `.env.example`
+6. Ensure `data/inbox`, `data/output`, `logs` exist
+7. Check `tkinter` availability
+8. Print final “you’re ready” commands for CLI and GUI
+
+Questions asked
+1. `Enable LLM support for data extraction? (y/n)`
+
+Only if answer is `y`:
+2. `OpenRouter model to use?` (default: `openrouter/free`)
+3. `Enter OPENROUTER_API_KEY now? (y/n)`
+4. If yes, secure hidden prompt for key
+
+Tkinter check behavior
+- Script attempts `import tkinter`
+- If unavailable, it prints a clear warning:
+  - GUI may not work properly in this Python build
+  - CLI remains fully supported
+
+If you approve, I’ll implement this script and add a short README “one-command setup” section.
+
+User 2026-04-27 00:59:25 CDT
+Yep, approved.
+
+Codex 2026-04-27 01:02:09 CDT
+Implemented and aligned to your approved changes.
+
+Added
+- New interactive startup script: [setup_project.py](<REDACTED_PATH>)
+
+Updated
+- Added “First-Time Setup Script” section in [README.md](<REDACTED_PATH>)
+
+Script behavior
+- Creates `.venv` if needed
+- Installs `requirements.lock.txt` and `pip install -e .`
+- Creates/updates `.env`
+- Ensures `data/inbox`, `data/output`, `logs` exist
+- Checks `tkinter` support and warns if missing (GUI may not work, CLI still works)
+
+Questions now asked
+1. `Enable LLM support for data extraction? (y/n)`
+2. Only if `y`:
+- `OpenRouter model to use?` (default from `.env`, fallback `openrouter/free`)
+- `Enter OPENROUTER_API_KEY now? (y/n)` (hidden prompt if yes)
+
+Removed exactly as requested:
+- exception assist question
+- input mode question
+- max bytes question
+- logs directory question
+- risk controls question
+- smoke test question
+
+Validation
+- Syntax check passed: `PYTHONPATH=src .venv/bin/python -m py_compile scripts/setup_project.py`
+
+User 2026-04-27 01:02:09 CDT
+Ah, one change - just put the setup script in the root folder
